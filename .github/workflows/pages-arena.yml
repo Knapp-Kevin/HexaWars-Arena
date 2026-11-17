@@ -10,7 +10,6 @@ on:
       - "src/shared/public-match.ts"
       - "scripts/build-pages.mjs"
       - "scripts/verify-pages.mjs"
-      - "src/vendor/verdant/**"
       - ".github/workflows/pages-arena.yml"
   push:
     branches: [main]
