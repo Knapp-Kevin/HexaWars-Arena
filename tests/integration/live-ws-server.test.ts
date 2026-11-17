@@ -57,7 +57,12 @@ async function rawUpgradeStatus(port: number, token: string): Promise<string> {
 }
 
 function openBot(url: string, token: string): Bot {
-  const socket = new WebSocket(url, { headers: { Authorization: `Bearer ${token}` } });
+  // Bun's header-bearing WebSocket constructor is a runtime extension absent
+  // from the standard DOM constructor type. Real acceptance verifies it.
+  const BunHeaderWebSocket = WebSocket as unknown as new (
+    url: string, options: { headers: Record<string, string> },
+  ) => WebSocket;
+  const socket = new BunHeaderWebSocket(url, { headers: { Authorization: `Bearer ${token}` } });
   const frames: Record<string, unknown>[] = [];
   const ready = new Promise<void>((resolve, reject) => {
     socket.addEventListener("open", () => resolve(), { once: true });
