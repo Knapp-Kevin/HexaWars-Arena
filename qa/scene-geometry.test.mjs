@@ -46,7 +46,13 @@ test("all 12 frames produce deterministic, finite and detailed Verdant meshes",(
     assert(m.pos.length<1500000,"Unbounded geometry budget");
     assert(m.pos.every(Number.isFinite),"Nonfinite vertex");
     assert(m.norm.every(Number.isFinite),"Nonfinite normal");
-    assert(m.col.every(c=>Number.isFinite(c)&&c>=0&&c<=1),"Invalid material color");
+    assert(m.col.every((c,i)=>Number.isFinite(c)&&c>=0&&c<(i%3===0?4:1)),
+      "Invalid Verdant material channel");
+    const tags=new Set();
+    for(let i=0;i<m.col.length;i+=3)tags.add(Math.floor(m.col[i]));
+    for(const material of [0,1,2,3]){
+      assert(tags.has(material),`Missing Verdant diffuse/water/metal/emissive material ${material}`);
+    }
     assert.equal(m.idx.at(-1),m.idx.length-1);
     meshes.push(m);
   }
