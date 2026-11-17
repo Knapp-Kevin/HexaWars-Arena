@@ -22,13 +22,23 @@ import type {
 
 const DEFAULT_TURN_TIMEOUT_MS = 5000;
 
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<{ ok: true; value: T } | { ok: false }> {
+function withTimeout<T>(
+  promise: Promise<T>, ms: number, signal: AbortSignal,
+): Promise<{ ok: true; value: T } | { ok: false }> {
   return new Promise((resolve) => {
-    const timer = setTimeout(() => resolve({ ok: false }), ms);
-    promise.then(
-      (value) => { clearTimeout(timer); resolve({ ok: true, value }); },
-      () => { clearTimeout(timer); resolve({ ok: false }); },
-    );
+    let done = false;
+    const settle = (result: { ok: true; value: T } | { ok: false }) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      signal.removeEventListener("abort", cancel);
+      resolve(result);
+    };
+    const cancel = () => settle({ ok: false });
+    const timer = setTimeout(cancel, ms);
+    if (signal.aborted) { cancel(); return; }
+    signal.addEventListener("abort", cancel, { once: true });
+    promise.then((value) => settle({ ok: true, value }), cancel);
   });
 }
 
@@ -144,11 +154,14 @@ export class MatchRunner {
     };
 
     let forfeitWinnerId: number | null = null;
+    const closed = new AbortController();
     channels.a.onClose?.(() => {
       forfeitWinnerId = ctx.b.id;
+      closed.abort();
     });
     channels.b.onClose?.(() => {
       forfeitWinnerId = ctx.a.id;
+      closed.abort();
     });
 
     while (true) {
@@ -167,14 +180,17 @@ export class MatchRunner {
       sendRoundFrame(channels.b, projectSeatObservation(state, "B"), budgetB);
 
       const [resA, resB] = await Promise.all([
-        withTimeout(receivePlanFromChannel(channels.a), turnTimeoutMs),
-        withTimeout(receivePlanFromChannel(channels.b), turnTimeoutMs),
+        withTimeout(receivePlanFromChannel(channels.a), turnTimeoutMs, closed.signal),
+        withTimeout(receivePlanFromChannel(channels.b), turnTimeoutMs, closed.signal),
       ]);
 
       if (channels.a.closed || channels.b.closed) {
         const winnerId = channels.a.closed && channels.b.closed ? null
           : channels.a.closed ? ctx.b.id : ctx.a.id;
         return complete(this.endForfeit(ctx.matchId, winnerId));
+      }
+      if (forfeitWinnerId !== null) {
+        return complete(this.endForfeit(ctx.matchId, forfeitWinnerId));
       }
       if (!resA.ok || !resB.ok) {
         if (!resA.ok && !resB.ok) return complete(this.endTimeout(ctx.matchId, null));
