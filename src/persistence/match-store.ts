@@ -113,30 +113,29 @@ export function countEvents(db: Database, matchId: string): number {
   return row.n;
 }
 
+/**
+ * Finalize the existing match without deleting its row. REPLACE is a DELETE + INSERT
+ * in SQLite and violates the FK relationship with append-only match_events.
+ */
+function finalizeMatch(db: Database, id: string, outcome: string, originTag: string): void {
+  const result = db.prepare(
+    "UPDATE matches SET origin_tag = ?, outcome = ? WHERE id = ?",
+  ).run(originTag, outcome, id);
+  if (result.changes !== 1) {
+    throw new Error(`cannot finalize missing match: ${id}`);
+  }
+}
+
 export function updateMatchOutcome(
   db: Database,
   id: string,
   outcome: string,
-  winnerOperatorId: number | null,
+  _winnerOperatorId: number | null,
   originTag = "ladder",
 ): void {
-  db.prepare(
-    `INSERT OR REPLACE INTO matches
-       (id, operator_a_id, operator_b_id, agent_a_id, agent_b_id,
-        origin_tag, outcome, created_at)
-     SELECT id, operator_a_id, operator_b_id, agent_a_id, agent_b_id,
-            ?, ?, created_at
-     FROM matches WHERE id = ?`,
-  ).run(originTag, outcome, id);
+  finalizeMatch(db, id, outcome, originTag);
 }
 
 export function updateForfeit(db: Database, id: string, outcome: string, originTag: string): void {
-  db.prepare(
-    `INSERT OR REPLACE INTO matches
-       (id, operator_a_id, operator_b_id, agent_a_id, agent_b_id,
-        origin_tag, outcome, created_at)
-     SELECT id, operator_a_id, operator_b_id, agent_a_id, agent_b_id,
-            ?, ?, created_at
-     FROM matches WHERE id = ?`,
-  ).run(originTag, outcome, id);
+  finalizeMatch(db, id, outcome, originTag);
 }
