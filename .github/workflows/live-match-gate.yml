@@ -65,9 +65,12 @@ jobs:
           persist-credentials: false
       - name: Record baseline TypeScript diagnostics
         run: |
-          (cd .typecheck-base && bun install --frozen-lockfile)
+          # Keep baseline outside the candidate source tree: existing tests use
+          # relative imports that escape the repo and must fail identically.
+          cp -a .typecheck-base "$RUNNER_TEMP/hexawars-typecheck-base"
+          (cd "$RUNNER_TEMP/hexawars-typecheck-base" && bun install --frozen-lockfile)
           set +e
-          (cd .typecheck-base && bunx tsc --noEmit --pretty false) > "$RUNNER_TEMP/base-types.txt" 2>&1
+          (cd "$RUNNER_TEMP/hexawars-typecheck-base" && bunx tsc --noEmit --pretty false) > "$RUNNER_TEMP/base-types.txt" 2>&1
           result=$?
           if [ "$result" -ne 0 ] && ! grep -Eq 'error TS[0-9]+' "$RUNNER_TEMP/base-types.txt"; then
             cat "$RUNNER_TEMP/base-types.txt"
