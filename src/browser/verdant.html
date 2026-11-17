@@ -118,6 +118,16 @@
       .camera-tools{top:auto;bottom:72px;right:8px;max-width:none;flex-wrap:nowrap}
       .terrain-badge{display:none}
     }
+
+    .mobile-score{display:none}
+    @media(max-width:850px){
+      .mobile-score{position:absolute;top:93px;left:8px;display:flex;gap:5px;pointer-events:none;font-size:11px;font-weight:750;letter-spacing:.06em}
+      .mobile-score span{padding:5px 9px;border:1px solid #ffffff30;background:#071827d9;border-radius:7px}
+      .mobile-score-blue{color:#83bcfa}
+      .mobile-score-red{color:#ff858c}
+      .mobile-score strong{color:#fff;margin-left:3px}
+      aside>section.panel:first-child{display:none}
+    }
   </style>
   <script type="module" src="./verdant.js"></script>
 </head>
@@ -140,6 +150,10 @@
         <div class="viewport">
           <canvas id="verdant-stage" width="1100" height="650" tabindex="0" aria-label="Three dimensional tactical hex battlefield. Drag to orbit, Shift-drag to pan, wheel or plus/minus to zoom, zero to reset."></canvas>
           <div class="hud"><span id="view-heading">BATTLEFIELD PROJECTION · SCRIPTED REPLAY</span><strong id="headline">Loading the tactical scene</strong></div>
+          <div class="mobile-score" role="status" aria-label="Squads remaining">
+            <span class="mobile-score-blue">BLUE <strong id="mobile-blue-count">5</strong></span>
+            <span class="mobile-score-red">RED <strong id="mobile-red-count">5</strong></span>
+          </div>
           <div class="terrain-badge" aria-label="Balanced arena size"><strong id="tile-count">61</strong> tactical hexes · balanced footprint</div>
           <div class="camera-tools" role="group" aria-label="Battlefield camera controls">
             <button id="camera-zoom-out" type="button" aria-label="Zoom out" title="Zoom out">−</button>
