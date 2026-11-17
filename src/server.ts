@@ -136,9 +136,10 @@ export default {
       if (!req.headers.get("upgrade")?.toLowerCase().includes("websocket")) {
         return new Response("Expected WebSocket upgrade", { status: 426 });
       }
-      // External bots authenticate using an HTTP header. Never accept long-lived
-      // operator tokens in URLs; browsers cannot set this header on WebSocket.
-      if (req.headers.has("origin")) return new Response("Browser origin not supported", { status: 403 });
+      // This endpoint never authenticates with cookies or URL tokens.
+      // Authorization is mandatory, including for clients that send Origin.
+      // Browser JS WebSocket cannot attach this header without a trusted proxy.
+      // Do not use Origin as an authentication signal.
       const authorization = /^Bearer\\s+(.+)$/i.exec(req.headers.get("authorization") ?? "");
       if (!authorization) return new Response("Missing bearer credential", { status: 401 });
       const operator = getOperatorByToken(db, authorization[1]);
