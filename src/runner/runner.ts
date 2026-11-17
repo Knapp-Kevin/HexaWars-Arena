@@ -126,11 +126,22 @@ export class MatchRunner {
     };
     saveMatch(this.db, { ...matchRecord, originTag: "ladder" });
 
-    let state: MatchState = createMatch(ctx.matchId, String(ctx.a.id), String(ctx.b.id));
+    let state: MatchState = createMatch(ctx.seed, String(ctx.a.id), String(ctx.b.id));
     let budgetA: AgentRoundBudget = newBudget();
     let budgetB: AgentRoundBudget = newBudget();
     let round = 0;
     let seq = 0;
+    // Reveal a per-match seed only after the outcome is recorded, so the
+    // public match ID cannot be used to infer hidden terrain during play.
+    const complete = (result: RunnerResult): RunnerResult => {
+      appendEvents(this.db, ctx.matchId, [{
+        seq: seq++,
+        eventType: "match_seed_revealed",
+        payload: JSON.stringify({ seed: ctx.seed }),
+        ts: Date.now(),
+      }]);
+      return result;
+    };
 
     let forfeitWinnerId: number | null = null;
     channels.a.onClose?.(() => {
@@ -143,13 +154,13 @@ export class MatchRunner {
     while (true) {
       if (channels.a.closed || channels.b.closed) {
         const winnerId = channels.a.closed ? ctx.b.id : ctx.a.id;
-        return this.endForfeit(ctx.matchId, winnerId);
+        return complete(this.endForfeit(ctx.matchId, winnerId));
       }
       if (forfeitWinnerId !== null) {
-        return this.endForfeit(ctx.matchId, forfeitWinnerId);
+        return complete(this.endForfeit(ctx.matchId, forfeitWinnerId));
       }
       if (round >= ROUND_CAP) {
-        return this.endTimeout(ctx.matchId, null);
+        return complete(this.endTimeout(ctx.matchId, null));
       }
 
       sendRoundFrame(channels.a, projectSeatObservation(state, "A"), budgetA);
@@ -163,12 +174,12 @@ export class MatchRunner {
       if (channels.a.closed || channels.b.closed) {
         const winnerId = channels.a.closed && channels.b.closed ? null
           : channels.a.closed ? ctx.b.id : ctx.a.id;
-        return this.endForfeit(ctx.matchId, winnerId);
+        return complete(this.endForfeit(ctx.matchId, winnerId));
       }
       if (!resA.ok || !resB.ok) {
-        if (!resA.ok && !resB.ok) return this.endTimeout(ctx.matchId, null);
-        if (!resA.ok) return this.endTimeout(ctx.matchId, ctx.b.id);
-        return this.endTimeout(ctx.matchId, ctx.a.id);
+        if (!resA.ok && !resB.ok) return complete(this.endTimeout(ctx.matchId, null));
+        if (!resA.ok) return complete(this.endTimeout(ctx.matchId, ctx.b.id));
+        return complete(this.endTimeout(ctx.matchId, ctx.a.id));
       }
 
       const planA = resA.value;
@@ -176,11 +187,11 @@ export class MatchRunner {
 
       const invalidA = validateRoundPlan(planA, "A", state, budgetA);
       if (!invalidA.ok) {
-        return this.endInvalidPlan(ctx.matchId, ctx.b.id, "A", invalidA.reason);
+        return complete(this.endInvalidPlan(ctx.matchId, ctx.b.id, "A", invalidA.reason));
       }
       const invalidB = validateRoundPlan(planB, "B", state, budgetB);
       if (!invalidB.ok) {
-        return this.endInvalidPlan(ctx.matchId, ctx.a.id, "B", invalidB.reason);
+        return complete(this.endInvalidPlan(ctx.matchId, ctx.a.id, "B", invalidB.reason));
       }
 
       const result = runRound({
@@ -204,7 +215,7 @@ export class MatchRunner {
       if (result.ended) break;
     }
 
-    return this.endByVictory(ctx.matchId, state, ctx.a.id, ctx.b.id);
+    return complete(this.endByVictory(ctx.matchId, state, ctx.a.id, ctx.b.id));
   }
 
   private endForfeit(matchId: string, winnerId: number | null): RunnerResult {
