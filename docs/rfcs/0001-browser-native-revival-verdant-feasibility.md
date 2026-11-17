@@ -27,16 +27,16 @@ Revive **HexaWars Arena as a browser-first, spectator-friendly game of strategic
 
 ### HexaWars code that exists
 
-- Bun / TypeScript / Hono: [package.json](../package.json), [server](../src/server.ts).
-- Deterministic hex-board and turn mechanics: [engine](../src/engine/), including [round driver](../src/engine/roundDriver.ts), [fog](../src/engine/fog.ts), [cube coords](../src/engine/coords.ts), and [shared states](../src/shared/types.ts).
-- Existing agent-contract and gateway modules: [contract](AGENT_CONTRACT.md), [gateway](../src/gateway/).
+- Bun / TypeScript / Hono: [package.json](../../package.json), [server](../../src/server.ts).
+- Deterministic hex-board and turn mechanics: [engine](../../src/engine/), including [round driver](../../src/engine/roundDriver.ts), [fog](../../src/engine/fog.ts), [cube coords](../../src/engine/coords.ts), and [shared states](../../src/shared/types.ts).
+- Existing agent-contract and gateway modules: [contract](../AGENT_CONTRACT.md), [gateway](../../src/gateway/).
 - Identity, storage, matchmaker, rank, Swiss pairing, event projections and replay/spectator assets: `src/identity/`, `src/persistence/`, `src/matchmaker/`, `src/rank/`, `src/tournament/`, `src/projection/` and `src/public/`.
 - Existing tests cover many individual components. **A source file or past passing-test claim is not evidence that the hosted experience presently works end to end.**
 
 ### Specific current risks
 
 1. **Real agent execution is not proven.** `src/server.ts` constructs paired `AgentChannel` objects with `send: () => {}` and `onMessage: () => {}`; the matchmaker callback can start a runner without genuinely carrying a player's messages. Do not market this as a functional competitive ladder until real sockets, turns, decisions, and persisted results are exercised end to end.
-2. **Multiple contract eras must be reconciled.** [AGENT_CONTRACT.md](AGENT_CONTRACT.md) describes a frozen v1 `ACTION` frame, while [shared types](../src/shared/types.ts) contain `RoundPlan` and extended action economy; an implementation and docs audit must identify exactly which protocol and rules the live runner actually uses.
+2. **Multiple contract eras must be reconciled.** [AGENT_CONTRACT.md](../AGENT_CONTRACT.md) describes a frozen v1 `ACTION` frame, while [shared types](../../src/shared/types.ts) contain `RoundPlan` and extended action economy; an implementation and docs audit must identify exactly which protocol and rules the live runner actually uses.
 3. **Old hosting paths are historical.** Some project docs still name `zocomputer.io`, Zo paths and prior Qor governance. No new feature should rely on those services, paths or claims. Preserve history as history rather than mass-editing the original evidence ledger.
 4. **Tracked databases require a security audit.** Current Git tree tracks `.arena/state.db`, `.arena/state.db-shm`, `.arena/state.db-wal`, `.data/arena.db`, WAL/SHM derivatives and root `arena.db*`. `.gitignore` only excludes `node_modules/`. Determine whether these hold tokens, identity data, private match state or other sensitive records before choosing safe deletion, retention, rotation, or history redaction. Do not blindly destroy or rewrite data.
 5. **Replay integrity and fog policy must be verified.** The spectator can potentially see more than either agent; server-to-agent observations must never leak the opponent's hidden data. Replaying events must not silently reconstruct unavailable private information as something the agent knew.
