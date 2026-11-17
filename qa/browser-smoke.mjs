@@ -173,9 +173,15 @@ async function verifyMobileViewport() {
   assert(width >= 330 && width < 390, `Invalid mobile viewport width: ${width}`);
   const toolbar = page.locator(".camera-tools");
   assert(await toolbar.isVisible(), "Camera tools hidden on mobile");
+  const mobileCanvas=page.locator("#verdant-stage");
+  const overview = Number(await mobileCanvas.getAttribute("data-camera-distance"));
+  assert(overview > 15, `Mobile camera did not adapt to narrow viewport: ${overview}`);
   await page.locator("#camera-zoom-in").click();
-  const zoom = Number(await page.locator("#verdant-stage").getAttribute("data-camera-distance"));
-  assert(zoom < 20, "Mobile zoom button ineffective");
+  const zoom = Number(await mobileCanvas.getAttribute("data-camera-distance"));
+  assert(zoom < overview*.9, "Mobile zoom button ineffective");
+  await page.locator("#camera-reset").click();
+  assert(Math.abs(Number(await mobileCanvas.getAttribute("data-camera-distance"))-overview)<.02,
+    "Mobile camera reset failed");
   await page.screenshot({ path: resolve(screenshots, "verdant-mobile.png"), fullPage: true });
   assertHealthy("mobile");
   await page.close();
