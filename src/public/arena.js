@@ -382,7 +382,7 @@ function bindShellActions() {
 async function main() {
   const params = new URLSearchParams(window.location.search);
   let matchId = params.get("matchId");
-  isDemoMode = params.get("demo") === "1";
+  isDemoMode = params.get("demo") === "1" || document.documentElement.dataset.pages === "true";
   updateTopbar(isDemoMode ? "demo" : "live", matchId);
   updatePlaybackUi();
   bindDemoControls();
