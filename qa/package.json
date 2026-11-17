@@ -1,0 +1,9 @@
+{
+  "name": "hexawars-browser-acceptance",
+  "private": true,
+  "type": "module",
+  "description": "Test-only real Chrome acceptance for published SVG replay and Verdant 3D viewport",
+  "devDependencies": {
+    "playwright-core": "1.56.1"
+  }
+}
