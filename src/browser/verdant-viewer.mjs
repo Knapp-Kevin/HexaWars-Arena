@@ -35,6 +35,8 @@ const mobilePrevious=document.getElementById("mobile-prev");
 const mobileNext=document.getElementById("mobile-next");
 const mobilePlay=document.getElementById("mobile-play");
 const compactRound=document.getElementById("compact-round");
+const mobileBlueCount=document.getElementById("mobile-blue-count");
+const mobileRedCount=document.getElementById("mobile-red-count");
 
 const frames = buildDemoFrames()
   .filter(frame => frame.type === "MATCH_HELLO" || frame.type === "MATCH_STATE")
@@ -90,8 +92,12 @@ function displayFrame(next) {
   roundText.textContent=`${step+1} / ${frames.length}`;
   compactRound.textContent=`${step+1} / ${frames.length}`;
   headline.textContent=projection.featured?.headline ?? "Tactical deployment";
-  blue.textContent=String(projection.board.units.filter(u=>u.side==="A").length);
-  red.textContent=String(projection.board.units.filter(u=>u.side==="B").length);
+  const blueUnits=String(projection.board.units.filter(u=>u.side==="A").length);
+  const redUnits=String(projection.board.units.filter(u=>u.side==="B").length);
+  blue.textContent=blueUnits;
+  red.textContent=redUnits;
+  mobileBlueCount.textContent=blueUnits;
+  mobileRedCount.textContent=redUnits;
 }
 function updateAnimatedUnits(now) {
   if(!animation)return;
