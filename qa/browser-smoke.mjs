@@ -196,6 +196,11 @@ async function verifyMobileViewport() {
   const toolbar = page.locator(".camera-tools");
   assert(await toolbar.isVisible(), "Camera tools hidden on mobile");
   assert(await page.locator(".mobile-playback").isVisible(), "Mobile replay dock missing");
+  assert(await page.locator(".mobile-score").isVisible(), "Mobile faction count missing");
+  assert.equal((await page.locator("#mobile-blue-count").innerText()).trim(),"5");
+  assert.equal((await page.locator("#mobile-red-count").innerText()).trim(),"5");
+  assert(!await page.locator("aside>section.panel:first-child").isVisible(),
+    "Mobile exposes duplicate desktop replay controls");
   assert(!await page.locator(".intro p:not(.eyebrow)").isVisible(),
     "Mobile UI should not open with explanatory developer prose");
   assert(!await page.locator(".field-guide").evaluate(el => el.open),
