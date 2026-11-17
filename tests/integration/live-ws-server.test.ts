@@ -1,5 +1,6 @@
 import { test, expect } from "bun:test";
-import { createServer } from "node:net";
+import { createServer, connect } from "node:net";
+import { randomBytes } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -25,6 +26,34 @@ async function health(base: string): Promise<void> {
     await Bun.sleep(100);
   }
   throw new Error("Bun arena server did not become healthy");
+}
+
+async function rawUpgradeStatus(port: number, token: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const socket = connect(port, "127.0.0.1");
+    let chunk = "";
+    const timer = setTimeout(() => { socket.destroy(); reject(new Error("raw upgrade timeout")); }, 3000);
+    socket.on("error", err => { clearTimeout(timer); reject(err); });
+    socket.on("connect", () => {
+      const key = randomBytes(16).toString("base64");
+      socket.write(
+        "GET /api/arena/agents/ws HTTP/1.1\\r\\n" +
+        `Host: 127.0.0.1:${port}\\r\\n` +
+        "Connection: Upgrade\\r\\nUpgrade: websocket\\r\\n" +
+        `Sec-WebSocket-Key: ${key}\\r\\n` +
+        "Sec-WebSocket-Version: 13\\r\\n" +
+        `Authorization: Bearer ${token}\\r\\n` +
+        "Origin: http://localhost\\r\\n\\r\\n",
+      );
+    });
+    socket.on("data", buf => {
+      chunk += buf.toString();
+      if (!chunk.includes("\\r\\n")) return;
+      clearTimeout(timer);
+      socket.destroy();
+      resolve(chunk.split("\\r\\n")[0]);
+    });
+  });
 }
 
 function openBot(url: string, token: string): Bot {
@@ -85,6 +114,9 @@ test("two real authenticated WebSockets finish a match and fetch persisted repla
     }
     const tokenA = await register("live_alpha");
     const tokenB = await register("live_bravo");
+    const handshakeStatus = await rawUpgradeStatus(port, tokenA);
+    expect(handshakeStatus).toContain("101");
+    await Bun.sleep(100);
     const wsUrl = `ws://127.0.0.1:${port}/api/arena/agents/ws`;
     bots.push(openBot(wsUrl, tokenA), openBot(wsUrl, tokenB));
     await Promise.all(bots.map(b => b.ready));
