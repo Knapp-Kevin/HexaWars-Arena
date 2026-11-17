@@ -26,7 +26,7 @@ for (const filename of files) {
 }
 const required = [
   "index.html", "arena.html", "verdant.html", "arena.js",
-  "verdant.js", "scene-renderer.mjs", "battlefield-geometry.mjs", "demo-replay.js", "public-match.js",
+  "verdant.js", "scene-renderer.mjs", "battlefield-geometry.mjs", "replay-motion.mjs", "demo-replay.js", "public-match.js",
   ".nojekyll", "arena.css", "arena-core.css", "arena-shell.css",
   "arena-board.css", "arena-dialog.css", "LICENSE-MIT.txt",
   "LICENSE-APACHE.txt", "THIRD_PARTY_NOTICES.md",
@@ -53,6 +53,8 @@ assert(demo.includes('"./public-match.js"'), "Replay projection runtime unresolv
 assert(!projection.includes("import type "), "Uncompiled TypeScript found in output");
 assert(verdant.includes("createBestRenderer"), "Actual Verdant rendering integration missing");
 assert(verdant.includes("./battlefield-geometry.mjs"), "Public Verdant geometry missing");
+assert(verdant.includes("./replay-motion.mjs"), "Public replay animation missing");
+assert(verdant.includes("uploadSplitBuffers"), "Verdant motion is not using static/dynamic GPU buffers");
 assert(lab.includes('src="./verdant.js"'), "3D lab entry missing");
 
 // Every relative ESM import in the published modules must resolve into the
