@@ -1,4 +1,4 @@
-import { UNIT_CATALOG } from "./unit-catalog.js?v=20260422r1";
+import { UNIT_CATALOG } from "./unit-catalog.js";
 
 const STAT_ICON = {
   hp: "HP",
