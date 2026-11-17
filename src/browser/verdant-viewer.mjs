@@ -38,7 +38,12 @@ if (!frames.length || !frames.every(frame => Array.isArray(frame?.board?.cells))
   throw new Error("HexaWars demo contains no usable public board projections");
 }
 const bounds = boardBounds(frames[0].board.cells);
-const HOME_DISTANCE = Math.max(12.8, bounds.halfExtent * 2.55);
+// Narrow screens need a longer overview distance or a valid symmetric board
+// is clipped by the horizontal field of view before the user zooms in.
+const canvasBox = canvas.getBoundingClientRect();
+const screenAspect = canvasBox.width / Math.max(1,canvasBox.height);
+const HOME_DISTANCE = Math.max(12.8,bounds.halfExtent*2.55) *
+  Math.max(1,1.10/Math.max(.5,screenAspect));
 const MIN_DISTANCE = Math.max(6.7, HOME_DISTANCE * 0.49);
 const MAX_DISTANCE = HOME_DISTANCE * 2.7;
 const HOME_YAW = 0.72, HOME_ELEVATION = 0.97;
