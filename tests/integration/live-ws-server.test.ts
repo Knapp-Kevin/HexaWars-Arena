@@ -37,21 +37,21 @@ async function rawUpgradeStatus(port: number, token: string): Promise<string> {
     socket.on("connect", () => {
       const key = randomBytes(16).toString("base64");
       socket.write(
-        "GET /api/arena/agents/ws HTTP/1.1\\r\\n" +
-        `Host: 127.0.0.1:${port}\\r\\n` +
-        "Connection: Upgrade\\r\\nUpgrade: websocket\\r\\n" +
-        `Sec-WebSocket-Key: ${key}\\r\\n` +
-        "Sec-WebSocket-Version: 13\\r\\n" +
-        `Authorization: Bearer ${token}\\r\\n` +
-        "Origin: http://localhost\\r\\n\\r\\n",
+        "GET /api/arena/agents/ws HTTP/1.1\r\n" +
+        `Host: 127.0.0.1:${port}\r\n` +
+        "Connection: Upgrade\r\nUpgrade: websocket\r\n" +
+        `Sec-WebSocket-Key: ${key}\r\n` +
+        "Sec-WebSocket-Version: 13\r\n" +
+        `Authorization: Bearer ${token}\r\n` +
+        "Origin: http://localhost\r\n\r\n",
       );
     });
     socket.on("data", buf => {
       chunk += buf.toString();
-      if (!chunk.includes("\\r\\n")) return;
+      if (!chunk.includes("\r\n")) return;
       clearTimeout(timer);
       socket.destroy();
-      resolve(chunk.split("\\r\\n")[0]);
+      resolve(chunk.split("\r\n")[0]);
     });
   });
 }
