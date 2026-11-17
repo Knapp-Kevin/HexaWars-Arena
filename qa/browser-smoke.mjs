@@ -79,7 +79,7 @@ async function verifyClassic() {
     timeline: document.querySelectorAll("#timeline > *").length,
     hasVerdantLink: !!document.querySelector('a[href="./verdant.html"]'),
   }));
-  assert(state.boardCells >= 30);
+  assert.equal(state.boardCells, 61, "Classic replay must render the symmetric 61-hex board");
   assert(state.hasVerdantLink, "Classic UI has no navigation to Verdant");
   assert(state.ticker && state.ticker !== "-- / --", "Classic replay turn did not initialize");
   assert(state.timeline > 0, "Replay timeline did not initialize");
@@ -116,6 +116,21 @@ async function verifyVerdant() {
     undefined, { timeout: 15000 });
 
   const canvas = page.locator("#verdant-stage");
+  const home = Number(await canvas.getAttribute("data-camera-distance"));
+  assert(home > 8 && home < 20, `Default camera should fit the map closely: ${home}`);
+  assert.equal((await page.locator("#tile-count").innerText()).trim(), "61");
+  await page.locator("#camera-zoom-in").click();
+  const close = Number(await canvas.getAttribute("data-camera-distance"));
+  assert(close < home*.9, `Zoom in control did not change camera distance: ${close}`);
+  await page.locator("#camera-zoom-out").click();
+  const restored = Number(await canvas.getAttribute("data-camera-distance"));
+  assert(Math.abs(restored-home) < .02, "Zoom out did not restore previous distance");
+  await canvas.focus();
+  await page.keyboard.press("+");
+  assert(Number(await canvas.getAttribute("data-camera-distance")) < restored, "Keyboard zoom failed");
+  await page.keyboard.press("0");
+  assert(Math.abs(Number(await canvas.getAttribute("data-camera-distance"))-home) < .02,
+    "Keyboard reset failed");
   const box = await canvas.boundingBox();
   assert(box && box.width > 300 && box.height > 300, "3D viewport has no usable size");
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
@@ -123,6 +138,10 @@ async function verifyVerdant() {
   await page.mouse.move(box.x + box.width / 2 + 80, box.y + box.height / 2 + 30, { steps: 6 });
   await page.mouse.up();
   await page.mouse.wheel(0, 100);
+  const wheelDistance=Number(await canvas.getAttribute("data-camera-distance"));
+  assert(wheelDistance>home, "Wheel should zoom out");
+  await page.locator("#camera-reset").click();
+  assert(Math.abs(Number(await canvas.getAttribute("data-camera-distance"))-home) < .02);
   await page.waitForTimeout(500);
 
   const pixels = await page.evaluate(() => {
@@ -142,9 +161,31 @@ async function verifyVerdant() {
   await page.close();
 }
 
+async function verifyMobileViewport() {
+  const page = await newPage("mobile");
+  await page.setViewportSize({ width: 390, height: 844 });
+  const response = await page.goto(new URL("./verdant.html", base).href, { waitUntil: "domcontentloaded" });
+  assert(response?.ok());
+  await page.waitForFunction(() =>
+    document.querySelector("#backend-kind")?.textContent?.trim() === "webgl2",
+    undefined, {timeout:30000});
+  const width = await page.locator("#verdant-stage").evaluate(el=>el.getBoundingClientRect().width);
+  assert(width >= 330 && width < 390, `Invalid mobile viewport width: ${width}`);
+  const toolbar = page.locator(".camera-tools");
+  assert(await toolbar.isVisible(), "Camera tools hidden on mobile");
+  await page.locator("#camera-zoom-in").click();
+  const zoom = Number(await page.locator("#verdant-stage").getAttribute("data-camera-distance"));
+  assert(zoom < 20, "Mobile zoom button ineffective");
+  await page.screenshot({ path: resolve(screenshots, "verdant-mobile.png"), fullPage: true });
+  assertHealthy("mobile");
+  await page.close();
+  console.log(`PASS Mobile viewport: ${width}px 3D canvas and accessible camera controls`);
+}
+
 try {
   await verifyClassic();
   await verifyVerdant();
+  await verifyMobileViewport();
   console.log(`PASS: browser acceptance at ${base.href}`);
 } catch (error) {
   failures.push(error);
