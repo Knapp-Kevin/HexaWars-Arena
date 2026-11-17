@@ -4,6 +4,8 @@
 import type { Database } from "bun:sqlite";
 import type { AgentVersion, Fingerprint } from "../shared/types";
 import { fingerprint, normalizeCode } from "./fingerprint";
+import type { FingerprintInput } from "./fingerprint";
+import type { SimilarityFlag, CorpusEntry } from "./similarity";
 import {
   flagAgainst,
 } from "./similarity";
