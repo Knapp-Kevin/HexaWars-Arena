@@ -41,3 +41,7 @@ jobs:
             tests/matchmaker/loop.test.ts \
             src/gateway/spectator-ws.test.ts \
             tests/integration/live-ws-server.test.ts
+      - name: Full repository regression suite
+        run: bun test
+      - name: TypeScript strict no-emit check
+        run: bunx tsc --noEmit
