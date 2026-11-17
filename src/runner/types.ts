@@ -11,6 +11,8 @@ export interface OperatorRef {
 
 export interface RunnerContext {
   matchId: string;
+  /** Private authoritative seed; do not disclose until final match resolution. */
+  seed: string;
   ladderId?: string;
   a: OperatorRef;
   b: OperatorRef;
