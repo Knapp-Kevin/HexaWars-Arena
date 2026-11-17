@@ -140,7 +140,7 @@ export default {
       // Authorization is mandatory, including for clients that send Origin.
       // Browser JS WebSocket cannot attach this header without a trusted proxy.
       // Do not use Origin as an authentication signal.
-      const authorization = /^Bearer\\s+(.+)$/i.exec(req.headers.get("authorization") ?? "");
+      const authorization = /^Bearer\s+(.+)$/i.exec(req.headers.get("authorization") ?? "");
       if (!authorization) return new Response("Missing bearer credential", { status: 401 });
       const operator = getOperatorByToken(db, authorization[1]);
       if (!operator) return new Response("Invalid bearer credential", { status: 401 });
