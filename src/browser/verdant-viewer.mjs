@@ -77,14 +77,6 @@ function displayFrame(next) {
   red.textContent=String(projection.board.units.filter(u=>u.side==="B").length);
 }
 
-function resizeCanvas() {
-  const box=canvas.getBoundingClientRect();
-  const dpr=Math.min(2,window.devicePixelRatio||1);
-  const w=Math.max(2,Math.round(box.width*dpr));
-  const h=Math.max(2,Math.round(box.height*dpr));
-  if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}
-}
-
 function updateCameraLabels(){
   zoomReadout.textContent = `${Math.round(100*HOME_DISTANCE/distance)}%`;
   canvas.dataset.cameraDistance = distance.toFixed(3);
