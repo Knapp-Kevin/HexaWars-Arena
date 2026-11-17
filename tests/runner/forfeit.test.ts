@@ -18,6 +18,7 @@ function makeTempDb() {
       created_at  INTEGER NOT NULL
     );
   `);
+  db.exec("CREATE TABLE agent_versions (id INTEGER PRIMARY KEY, operator_id INTEGER NOT NULL); INSERT INTO agent_versions VALUES (10,10),(20,20)");
   return db;
 }
 
@@ -28,6 +29,7 @@ function makeChannel(id: number, overrides: Partial<AgentChannel> = {}): AgentCh
     operatorId: id,
     onClose: undefined,
     onMessage: undefined,
+    receivePlan: () => new Promise<never>(() => {}),
     closed: false,
     close() { (this as any).closed = true; },
     ...overrides,
@@ -49,9 +51,10 @@ describe("MatchRunner forfeit", () => {
     const runner = new MatchRunner(db);
     const ctx: RunnerContext = {
       matchId: "forfeit-a-close",
+      seed: "fixture-seed-forfeit-a-close",
       ladderId: "ladder-1",
-      a: { id: 10, name: "OpA" },
-      b: { id: 20, name: "OpB" },
+      a: { id: 10, agentVersionId: 10, name: "OpA" },
+      b: { id: 20, agentVersionId: 20, name: "OpB" },
     };
 
     const channelBclose = new (class {
@@ -62,6 +65,7 @@ describe("MatchRunner forfeit", () => {
       operatorId = 20;
       closeHandler: (() => void) | undefined;
       onMessage: ((msg: unknown) => void) | undefined;
+      receivePlan = () => new Promise<never>(() => {});
       onClose(fn: () => void) { this.closeHandler = fn; }
       close() { this.closed = true; this.fired = true; this.closeHandler?.(); }
       // B waits for message and never responds — only A closes mid-turn
@@ -79,6 +83,7 @@ describe("MatchRunner forfeit", () => {
       operatorId = 10;
       closeHandler: (() => void) | undefined;
       onMessage: ((msg: unknown) => void) | undefined;
+      receivePlan = () => new Promise<never>(() => {});
       onClose(fn: () => void) { this.closeHandler = fn; }
       close() { this.closed = true; this.closeHandler?.(); }
     })();
@@ -101,9 +106,10 @@ describe("MatchRunner forfeit", () => {
     const runner = new MatchRunner(db);
     const ctx: RunnerContext = {
       matchId: "forfeit-b-close",
+      seed: "fixture-seed-forfeit-b-close",
       ladderId: "ladder-1",
-      a: { id: 10, name: "OpA" },
-      b: { id: 20, name: "OpB" },
+      a: { id: 10, agentVersionId: 10, name: "OpA" },
+      b: { id: 20, agentVersionId: 20, name: "OpB" },
     };
 
     let closeHandlerB: (() => void) | undefined;
@@ -135,9 +141,10 @@ describe("MatchRunner forfeit", () => {
     const runner = new MatchRunner(db);
     const ctx: RunnerContext = {
       matchId: "forfeit-persist-check",
+      seed: "fixture-seed-forfeit-persist-check",
       ladderId: "ladder-1",
-      a: { id: 10, name: "OpA" },
-      b: { id: 20, name: "OpB" },
+      a: { id: 10, agentVersionId: 10, name: "OpA" },
+      b: { id: 20, agentVersionId: 20, name: "OpB" },
     };
 
     let closeHandlerA: (() => void) | undefined;
@@ -153,6 +160,9 @@ describe("MatchRunner forfeit", () => {
     const startPromise = runner.start(ctx, channels);
 
     channelA.close?.();
+    // This synthetic channel's close() only mutates a flag; drive its registered
+    // close callback to model the actual LiveAgentChannel disconnect signal.
+    closeHandlerA?.();
     await startPromise;
 
     const row = getMatch(db, "forfeit-persist-check");
@@ -168,9 +178,10 @@ describe("MatchRunner forfeit", () => {
     const runner = new MatchRunner(db);
     const ctx: RunnerContext = {
       matchId: "forfeit-no-hang",
+      seed: "fixture-seed-forfeit-no-hang",
       ladderId: "ladder-1",
-      a: { id: 10, name: "OpA" },
-      b: { id: 20, name: "OpB" },
+      a: { id: 10, agentVersionId: 10, name: "OpA" },
+      b: { id: 20, agentVersionId: 20, name: "OpB" },
     };
 
     let closeHandlerA: (() => void) | undefined;

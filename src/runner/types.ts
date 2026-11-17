@@ -2,6 +2,8 @@ import type { MatchState, AgentRoundBudget, RoundPlan } from "../shared/types.ts
 
 export interface OperatorRef {
   id: number;
+  /** Immutable agent version selected for this exact match. */
+  agentVersionId: number;
   name?: string;
   handle?: string;
   operator?: string;
@@ -9,6 +11,8 @@ export interface OperatorRef {
 
 export interface RunnerContext {
   matchId: string;
+  /** Private authoritative seed; do not disclose until final match resolution. */
+  seed: string;
   ladderId?: string;
   a: OperatorRef;
   b: OperatorRef;

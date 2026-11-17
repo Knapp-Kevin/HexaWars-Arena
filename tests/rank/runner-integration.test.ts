@@ -37,11 +37,11 @@ function createMockDb(initialOps: Array<{ id: number; elo: number }> = []) {
     }
     if (upper.startsWith("UPDATE") && upper.includes("MATCHES") && upper.includes("OUTCOME")) {
       // UPDATE matches SET outcome=?, winner_op_id=? WHERE id=?
-      const outcome = params[0] as string;
-      const winnerOpId = params[1] as number | null;
+      const originTag = params[0] as string;
+      const outcome = params[1] as string;
       const id = params[2] as string;
       const m = matches.get(id);
-      if (m) { m.outcome = outcome; m.winner_op_id = winnerOpId; }
+      if (m) { m.origin_tag = originTag; m.outcome = outcome; }
     }
     if (upper.startsWith("UPDATE") && upper.includes("FORFEIT")) {
       const winnerOpId = params[0] as number;
@@ -91,6 +91,13 @@ function createMockDb(initialOps: Array<{ id: number; elo: number }> = []) {
     prepare: (sql: string) => ({
       run: (...params: unknown[]) => runStmt(sql, ...params),
       all: (...params: unknown[]) => queryAll(sql, ...params),
+      get: (...params: unknown[]) => {
+        if (sql.includes("SELECT operator_id AS operatorId FROM agent_versions")) {
+          const id = Number(params[0]);
+          return ops.has(id) ? { operatorId: id } : undefined;
+        }
+        return undefined;
+      },
     }),
     transaction: (fn: () => void) => () => fn(),
   } as unknown as Database;
@@ -133,8 +140,9 @@ describe("runner-integration: ELO apply", () => {
 
     const ctx: RunnerContext = {
       matchId: "match-test-001",
-      a: { id: 10, name: "Alpha", operator: "alpha" },
-      b: { id: 20, name: "Beta", operator: "beta" },
+      seed: "fixture-seed-match-test-001",
+      a: { id: 10, agentVersionId: 10, name: "Alpha", operator: "alpha" },
+      b: { id: 20, agentVersionId: 20, name: "Beta", operator: "beta" },
     };
 
     const runner = new MatchRunner(db as Database);
@@ -178,8 +186,9 @@ describe("runner-integration: ELO apply", () => {
 
     const ctx: RunnerContext = {
       matchId: "match-seed-001",
-      a: { id: 30, name: "Gamma", operator: "gamma" },
-      b: { id: 40, name: "Delta", operator: "delta" },
+      seed: "fixture-seed-match-seed-001",
+      a: { id: 30, agentVersionId: 30, name: "Gamma", operator: "gamma" },
+      b: { id: 40, agentVersionId: 40, name: "Delta", operator: "delta" },
     };
 
     const runner = new MatchRunner(db as unknown as Database);

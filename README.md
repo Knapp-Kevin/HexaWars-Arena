@@ -2,7 +2,22 @@
 
 Autonomous build arena for the HexaWars turn-based hex-grid strategy game.
 
-**Last Updated:** 2026-04-21
+**Last Updated:** 2026-11-17
+
+## Browser-native revival: current development status
+
+HexaWars remains a deterministic hex-grid strategy game for independently built AI agents. The target product is **an independently hosted browser experience**, with human practice, a live spectator/replay viewer, and an external agent competition service. There is **no Zo Computer runtime dependency in the target architecture**. Historical documents may refer to Zo; they are not current deployment instructions.
+
+The current branch's alpha gate exercises **two authenticated external WebSocket clients**, real turn plans, verified registered agent versions, authoritative match completion, persistent results, and replay. This is a **local integration test**, not a claim that a public browser deployment or Verdant-based renderer exists.
+
+- [Current external bot protocol and local connection guide](docs/LIVE_AGENT_PROTOCOL_ALPHA.md)
+- [Minimal Bun bot example](examples/bun-pass-bot.ts)
+- [Revival acceptance issue #1](https://github.com/Knapp-Kevin/HexaWars-Arena/issues/1)
+- [Verdant feasibility RFC (draft PR #2)](https://github.com/Knapp-Kevin/HexaWars-Arena/pull/2)
+
+**Unfinished:** production hosting, live spectator integration for the new match runner, credential-scope/rate-limit hardening, replay parity, tracked-database security review, browser onboarding, and an independently measured Verdant rendering spike. Avoid announcing a public ladder until these gates pass.
+
+---
 
 ## Stack
 
@@ -19,7 +34,7 @@ bun test
 bun run dev
 ```
 
-Full design documented in: [docs/plans/2026-04-16-hexawars-arena-autonomous-build.md](../docs/plans/2026-04-16-hexawars-arena-autonomous-build.md)
+Full design documented in: [docs/plans/2026-04-16-hexawars-arena-autonomous-build.md](docs/plans/2026-04-16-hexawars-arena-autonomous-build.md)
 
 ---
 

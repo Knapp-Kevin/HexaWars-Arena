@@ -9,7 +9,7 @@ import { getActiveRuntime } from "../orchestrator/match-runner.ts";
 import { getMatch, streamEvents } from "../persistence/match-store";
 
 type UpgradeServer = {
-  [key: symbol]: ((req: Request, opts: { data: SpectatorSocketData }) => boolean) | undefined;
+  upgrade(req: Request, opts: { data: SpectatorSocketData }): boolean;
 };
 
 export interface SpectatorSocketData {
@@ -75,7 +75,7 @@ export function handleSpectatorWs(
   server: unknown,
   matchId: string,
   deps: SpectatorDeps,
-): Response {
+): Response | undefined {
   if (!req.headers.get("upgrade")?.toLowerCase().includes("websocket")) {
     return new Response("Expected WebSocket upgrade", { status: 426 });
   }
@@ -85,7 +85,7 @@ export function handleSpectatorWs(
     return new Response("Not Found", { status: 404 });
   }
 
-  const upgraded = (server as UpgradeServer)[Symbol.for("upgrade")]?.(req, {
+  const upgraded = (server as UpgradeServer).upgrade(req, {
     data: { kind: "spectator", matchId, frames },
   });
 
@@ -93,7 +93,8 @@ export function handleSpectatorWs(
     return new Response("Upgrade failed", { status: 500 });
   }
 
-  return new Response(null, { status: 101 });
+  // Bun owns the WebSocket 101 response after a successful upgrade.
+  return undefined;
 }
 
 export const spectatorWebSocket = {

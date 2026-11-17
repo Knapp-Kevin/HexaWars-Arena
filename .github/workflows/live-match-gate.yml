@@ -1,0 +1,85 @@
+name: HexaWars live match gate
+
+on:
+  pull_request:
+    paths:
+      - "README.md"
+      - "docs/LIVE_AGENT_PROTOCOL_ALPHA.md"
+      - "examples/**"
+      - "scripts/type-error-ratchet.mjs"
+      - "src/gateway/live-*.ts"
+      - "src/gateway/spectator-ws.ts"
+      - "src/matchmaker/loop.ts"
+      - "src/runner/**"
+      - "src/server.ts"
+      - "tests/gateway/live-channel.test.ts"
+      - "tests/integration/live-*.test.ts"
+      - "tests/runner/**"
+      - "tests/matchmaker/loop.test.ts"
+      - ".github/workflows/live-match-gate.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: hexawars-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+
+jobs:
+  live-match:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
+        with:
+          bun-version: "1.3.3"
+      - name: Install locked dependencies
+        run: bun install --frozen-lockfile
+      - name: Exercise gateway, pairing, runner and replay
+        run: |
+          bun test tests/gateway/live-channel.test.ts \
+            tests/integration/live-match.test.ts \
+            tests/runner/runner.test.ts \
+            tests/matchmaker/loop.test.ts \
+            src/gateway/spectator-ws.test.ts \
+            tests/integration/live-ws-server.test.ts
+      - name: Full repository regression suite
+        run: bun test
+      - name: Record candidate TypeScript diagnostics
+        run: |
+          set +e
+          bunx tsc --noEmit --pretty false > "$RUNNER_TEMP/head-types.txt" 2>&1
+          result=$?
+          if [ "$result" -ne 0 ] && ! grep -Eq 'error TS[0-9]+' "$RUNNER_TEMP/head-types.txt"; then
+            cat "$RUNNER_TEMP/head-types.txt"
+            exit 1
+          fi
+          exit 0
+      - name: Checkout exact PR base for TypeScript comparison
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.base.sha || 'main' }}
+          path: .typecheck-base
+          persist-credentials: false
+      - name: Record baseline TypeScript diagnostics
+        run: |
+          # Keep baseline outside the candidate source tree: existing tests use
+          # relative imports that escape the repo and must fail identically.
+          cp -a .typecheck-base "$RUNNER_TEMP/hexawars-typecheck-base"
+          (cd "$RUNNER_TEMP/hexawars-typecheck-base" && bun install --frozen-lockfile)
+          set +e
+          (cd "$RUNNER_TEMP/hexawars-typecheck-base" && bunx tsc --noEmit --pretty false) > "$RUNNER_TEMP/base-types.txt" 2>&1
+          result=$?
+          if [ "$result" -ne 0 ] && ! grep -Eq 'error TS[0-9]+' "$RUNNER_TEMP/base-types.txt"; then
+            cat "$RUNNER_TEMP/base-types.txt"
+            exit 1
+          fi
+          exit 0
+      - name: Fail if TypeScript errors increase
+        run: node scripts/type-error-ratchet.mjs "$RUNNER_TEMP/base-types.txt" "$RUNNER_TEMP/head-types.txt"

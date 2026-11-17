@@ -7,6 +7,8 @@ import { getMatch } from "../../src/persistence/match-store.ts";
 function makeTempDb() {
   const db = new Database(":memory:");
   db.exec(`
+    CREATE TABLE IF NOT EXISTS agent_versions (id INTEGER PRIMARY KEY, operator_id INTEGER NOT NULL);
+    INSERT INTO agent_versions VALUES (1, 10), (2, 20);
     CREATE TABLE IF NOT EXISTS matches (
       id          TEXT PRIMARY KEY,
       operator_a_id INTEGER NOT NULL,
@@ -45,7 +47,8 @@ describe("MatchRunner", () => {
     const runner = new MatchRunner(db);
     const ctx: RunnerContext = {
       matchId: "phantom-must-refuse",
-      a: { id: 10 }, b: { id: 20 },
+      seed: "private-seed-phantom-must-refuse",
+      a: { id: 10, agentVersionId: 1 }, b: { id: 20, agentVersionId: 2 },
     };
     const phantom: AgentChannel = { send: () => {} };
     await expect(runner.start(ctx, { a: phantom, b: fakeChannel(20) }, 10))
@@ -53,13 +56,27 @@ describe("MatchRunner", () => {
     expect(getMatch(db, ctx.matchId)).toBeNull();
   });
 
+  it("refuses cross-operator agent impersonation before saving a match", async () => {
+    const runner = new MatchRunner(db);
+    const ctx: RunnerContext = {
+      matchId: "wrong-version-owner",
+      seed: "private-seed-wrong-version-owner",
+      a: { id: 10, agentVersionId: 2 },
+      b: { id: 20, agentVersionId: 1 },
+    };
+    await expect(runner.start(ctx, { a: fakeChannel(10), b: fakeChannel(20) }))
+      .rejects.toThrow("agent version is not owned by queued operator");
+    expect(getMatch(db, ctx.matchId)).toBeNull();
+  });
+
   it("start() persists a match row", async () => {
     const runner = new MatchRunner(db);
     const ctx: RunnerContext = {
       matchId: "runner-skel-test-1",
+      seed: "private-seed-runner-skel-test-1",
       ladderId: "ladder-1",
-      a: { id: 10, name: "OpA" },
-      b: { id: 20, name: "OpB" },
+      a: { id: 10, name: "OpA", agentVersionId: 1 },
+      b: { id: 20, name: "OpB", agentVersionId: 2 },
     };
     const channels = { a: fakeChannel(10), b: fakeChannel(20) };
 
@@ -76,9 +93,10 @@ describe("MatchRunner", () => {
     const runner = new MatchRunner(db);
     const ctx: RunnerContext = {
       matchId: "runner-skel-test-2",
+      seed: "private-seed-runner-skel-test-2",
       ladderId: "ladder-1",
-      a: { id: 10, name: "OpA" },
-      b: { id: 20, name: "OpB" },
+      a: { id: 10, name: "OpA", agentVersionId: 1 },
+      b: { id: 20, name: "OpB", agentVersionId: 2 },
     };
     const channels = { a: fakeChannel(10), b: fakeChannel(20) };
 
@@ -95,9 +113,10 @@ describe("MatchRunner", () => {
     const runner = new MatchRunner(db);
     const ctx: RunnerContext = {
       matchId: "runner-skel-test-3",
+      seed: "private-seed-runner-skel-test-3",
       ladderId: "ladder-1",
-      a: { id: 10, name: "OpA" },
-      b: { id: 20, name: "OpB" },
+      a: { id: 10, name: "OpA", agentVersionId: 1 },
+      b: { id: 20, name: "OpB", agentVersionId: 2 },
     };
     const channels = { a: fakeChannel(10), b: fakeChannel(20) };
 

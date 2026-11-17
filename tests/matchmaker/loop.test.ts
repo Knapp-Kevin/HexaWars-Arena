@@ -44,6 +44,21 @@ describe('startMatchmaker', () => {
     expect(queue.size()).toBe(0);
   });
 
+  it('refused launches remain queued for a future online / valid match', async () => {
+    queue.enqueue(makeEntry(1));
+    queue.enqueue(makeEntry(2));
+    presence.connect(1);
+    presence.connect(2);
+    const { stop } = startMatchmaker({
+      queue, presence, intervalMs: 10,
+      onPair() { fired.count++; return false; },
+    });
+    await new Promise(resolve => setTimeout(resolve, 45));
+    stop();
+    expect(fired.count).toBeGreaterThan(0);
+    expect(queue.size()).toBe(2);
+  });
+
   it('offline operator is skipped', async () => {
     queue.enqueue(makeEntry(1));
     queue.enqueue(makeEntry(2));

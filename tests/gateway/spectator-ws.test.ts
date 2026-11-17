@@ -43,16 +43,16 @@ describe("spectator websocket", () => {
       headers: { Upgrade: "websocket" },
     });
     const server = {
-      [Symbol.for("upgrade")]: (_request: Request, opts: { data: { matchId: string } }) => {
+      upgrade: (_request: Request, opts: { data: { matchId: string } }) => {
         upgrades.push({ matchId: opts.data.matchId });
         return true;
       },
     };
     const accepted = await handleSpectatorWs(req, server, DEMO_SEED_MATCH_ID, { db });
-    expect(accepted.status).toBe(101);
+    expect(accepted).toBeUndefined();
     expect(upgrades[0]?.matchId).toBe(DEMO_SEED_MATCH_ID);
 
     const missing = await handleSpectatorWs(req, server, "nope", { db });
-    expect(missing.status).toBe(404);
+    expect(missing?.status).toBe(404);
   });
 });

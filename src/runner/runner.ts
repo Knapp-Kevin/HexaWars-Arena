@@ -22,13 +22,23 @@ import type {
 
 const DEFAULT_TURN_TIMEOUT_MS = 5000;
 
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<{ ok: true; value: T } | { ok: false }> {
+function withTimeout<T>(
+  promise: Promise<T>, ms: number, signal: AbortSignal,
+): Promise<{ ok: true; value: T } | { ok: false }> {
   return new Promise((resolve) => {
-    const timer = setTimeout(() => resolve({ ok: false }), ms);
-    promise.then(
-      (value) => { clearTimeout(timer); resolve({ ok: true, value }); },
-      () => { clearTimeout(timer); resolve({ ok: false }); },
-    );
+    let done = false;
+    const settle = (result: { ok: true; value: T } | { ok: false }) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      signal.removeEventListener("abort", cancel);
+      resolve(result);
+    };
+    const cancel = () => settle({ ok: false });
+    const timer = setTimeout(cancel, ms);
+    if (signal.aborted) { cancel(); return; }
+    signal.addEventListener("abort", cancel, { once: true });
+    promise.then((value) => settle({ ok: true, value }), cancel);
   });
 }
 
@@ -102,56 +112,90 @@ export class MatchRunner {
         throw new Error(`missing live plan input for side ${side}`);
       }
     }
+    if (ctx.a.id === ctx.b.id) throw new Error("self matchmaking is not ranked play");
+    for (const participant of [ctx.a, ctx.b]) {
+      if (!Number.isSafeInteger(participant.agentVersionId) || participant.agentVersionId <= 0) {
+        throw new Error("registered agent version required");
+      }
+      const row = this.db.prepare(
+        "SELECT operator_id AS operatorId FROM agent_versions WHERE id = ?",
+      ).get(participant.agentVersionId) as { operatorId: number } | undefined;
+      if (!row || row.operatorId !== participant.id) {
+        throw new Error("agent version is not owned by queued operator");
+      }
+    }
     const matchRecord: MatchRecord = {
       id: ctx.matchId,
       operatorAId: ctx.a.id,
       operatorBId: ctx.b.id,
-      agentAId: 0,
-      agentBId: 0,
+      agentAId: ctx.a.agentVersionId,
+      agentBId: ctx.b.agentVersionId,
       originTag: "ladder:pending",
       outcome: null,
       createdAt: Date.now(),
     };
     saveMatch(this.db, { ...matchRecord, originTag: "ladder" });
 
-    let state: MatchState = createMatch(ctx.matchId, String(ctx.a.id), String(ctx.b.id));
+    let state: MatchState = createMatch(ctx.seed, String(ctx.a.id), String(ctx.b.id));
     let budgetA: AgentRoundBudget = newBudget();
     let budgetB: AgentRoundBudget = newBudget();
     let round = 0;
     let seq = 0;
+    // Reveal a per-match seed only after the outcome is recorded, so the
+    // public match ID cannot be used to infer hidden terrain during play.
+    const complete = (result: RunnerResult): RunnerResult => {
+      appendEvents(this.db, ctx.matchId, [{
+        seq: seq++,
+        eventType: "match_seed_revealed",
+        payload: JSON.stringify({ seed: ctx.seed }),
+        ts: Date.now(),
+      }]);
+      return result;
+    };
 
     let forfeitWinnerId: number | null = null;
+    const closed = new AbortController();
     channels.a.onClose?.(() => {
       forfeitWinnerId = ctx.b.id;
+      closed.abort();
     });
     channels.b.onClose?.(() => {
       forfeitWinnerId = ctx.a.id;
+      closed.abort();
     });
 
     while (true) {
       if (channels.a.closed || channels.b.closed) {
         const winnerId = channels.a.closed ? ctx.b.id : ctx.a.id;
-        return this.endForfeit(ctx.matchId, winnerId);
+        return complete(this.endForfeit(ctx.matchId, winnerId));
       }
       if (forfeitWinnerId !== null) {
-        return this.endForfeit(ctx.matchId, forfeitWinnerId);
+        return complete(this.endForfeit(ctx.matchId, forfeitWinnerId));
       }
       if (round >= ROUND_CAP) {
-        return this.endTimeout(ctx.matchId, null);
+        return complete(this.endTimeout(ctx.matchId, null));
       }
 
       sendRoundFrame(channels.a, projectSeatObservation(state, "A"), budgetA);
       sendRoundFrame(channels.b, projectSeatObservation(state, "B"), budgetB);
 
       const [resA, resB] = await Promise.all([
-        withTimeout(receivePlanFromChannel(channels.a), turnTimeoutMs),
-        withTimeout(receivePlanFromChannel(channels.b), turnTimeoutMs),
+        withTimeout(receivePlanFromChannel(channels.a), turnTimeoutMs, closed.signal),
+        withTimeout(receivePlanFromChannel(channels.b), turnTimeoutMs, closed.signal),
       ]);
 
+      if (channels.a.closed || channels.b.closed) {
+        const winnerId = channels.a.closed && channels.b.closed ? null
+          : channels.a.closed ? ctx.b.id : ctx.a.id;
+        return complete(this.endForfeit(ctx.matchId, winnerId));
+      }
+      if (forfeitWinnerId !== null) {
+        return complete(this.endForfeit(ctx.matchId, forfeitWinnerId));
+      }
       if (!resA.ok || !resB.ok) {
-        if (!resA.ok && !resB.ok) return this.endTimeout(ctx.matchId, null);
-        if (!resA.ok) return this.endTimeout(ctx.matchId, ctx.b.id);
-        return this.endTimeout(ctx.matchId, ctx.a.id);
+        if (!resA.ok && !resB.ok) return complete(this.endTimeout(ctx.matchId, null));
+        if (!resA.ok) return complete(this.endTimeout(ctx.matchId, ctx.b.id));
+        return complete(this.endTimeout(ctx.matchId, ctx.a.id));
       }
 
       const planA = resA.value;
@@ -159,11 +203,11 @@ export class MatchRunner {
 
       const invalidA = validateRoundPlan(planA, "A", state, budgetA);
       if (!invalidA.ok) {
-        return this.endInvalidPlan(ctx.matchId, ctx.b.id, "A", invalidA.reason);
+        return complete(this.endInvalidPlan(ctx.matchId, ctx.b.id, "A", invalidA.reason));
       }
       const invalidB = validateRoundPlan(planB, "B", state, budgetB);
       if (!invalidB.ok) {
-        return this.endInvalidPlan(ctx.matchId, ctx.a.id, "B", invalidB.reason);
+        return complete(this.endInvalidPlan(ctx.matchId, ctx.a.id, "B", invalidB.reason));
       }
 
       const result = runRound({
@@ -187,7 +231,7 @@ export class MatchRunner {
       if (result.ended) break;
     }
 
-    return this.endByVictory(ctx.matchId, state, ctx.a.id, ctx.b.id);
+    return complete(this.endByVictory(ctx.matchId, state, ctx.a.id, ctx.b.id));
   }
 
   private endForfeit(matchId: string, winnerId: number | null): RunnerResult {

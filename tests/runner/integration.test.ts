@@ -23,6 +23,7 @@ function makeTempDb() {
       created_at  INTEGER NOT NULL
     );
   `);
+  db.exec("CREATE TABLE agent_versions (id INTEGER PRIMARY KEY, operator_id INTEGER NOT NULL); INSERT INTO agent_versions VALUES (101,101),(102,102)");
   return db;
 }
 
@@ -56,7 +57,7 @@ function agentChannel(agent: RandomAgent): AgentChannel {
 
   return {
     send(frame: unknown) {
-      const state = frame as Parameters<RandomAgent["decide"]>[0];
+      const state = (frame as import("../../src/runner/types.ts").RoundFrame).state;
       _state = state;
       fire(); // fire immediately if a cb is already registered
     },
@@ -104,9 +105,10 @@ describe("Runner Integration", () => {
     const runner = new MatchRunner(db);
     const ctx: RunnerContext = {
       matchId: "integration-test-match-1",
+      seed: "fixture-seed-integration-test-match-1",
       ladderId: "ladder-it-1",
-      a: { id: 101, name: "alice" },
-      b: { id: 102, name: "bob" },
+      a: { id: 101, agentVersionId: 101, name: "alice" },
+      b: { id: 102, agentVersionId: 102, name: "bob" },
     };
 
     const result = await runner.start(ctx, { a: channelA, b: channelB });
