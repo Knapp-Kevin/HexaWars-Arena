@@ -9,7 +9,7 @@ on:
       - "src/runner/**"
       - "src/server.ts"
       - "tests/gateway/live-channel.test.ts"
-      - "tests/integration/live-match.test.ts"
+      - "tests/integration/live-*.test.ts"
       - "tests/runner/**"
       - "tests/matchmaker/loop.test.ts"
       - ".github/workflows/live-match-gate.yml"
@@ -39,4 +39,5 @@ jobs:
             tests/integration/live-match.test.ts \
             tests/runner/runner.test.ts \
             tests/matchmaker/loop.test.ts \
-            src/gateway/spectator-ws.test.ts
+            src/gateway/spectator-ws.test.ts \
+            tests/integration/live-ws-server.test.ts
