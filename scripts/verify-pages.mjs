@@ -33,7 +33,7 @@ const verdant=readFileSync(join(dir,"verdant.js"),"utf8");
 const lab=readFileSync(join(dir,"verdant.html"),"utf8");
 assert(index.includes('data-pages="true"'),"Static demo bootstrap absent");
 assert(index.includes('href="./verdant.html"'),"3D lab navigation absent");
-assert(index.includes('src="./arena.js"'),"Replay entry script absent");
+assert(/src="\.\/arena\.js(?:\?v=[^"]+)?"(?:\s|>)/.test(index),"Replay entry script absent");
 assert(!index.includes("/arena/static/"),"Unfixed root asset references");
 assert(!replay.includes("/arena/static/tokens/"),"Unfixed root token references");
 assert(replay.includes("MATCH_HELLO"),"Demo replay not bundled");
