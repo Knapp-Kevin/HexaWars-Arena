@@ -102,12 +102,24 @@ export class MatchRunner {
         throw new Error(`missing live plan input for side ${side}`);
       }
     }
+    if (ctx.a.id === ctx.b.id) throw new Error("self matchmaking is not ranked play");
+    for (const participant of [ctx.a, ctx.b]) {
+      if (!Number.isSafeInteger(participant.agentVersionId) || participant.agentVersionId <= 0) {
+        throw new Error("registered agent version required");
+      }
+      const row = this.db.prepare(
+        "SELECT operator_id AS operatorId FROM agent_versions WHERE id = ?",
+      ).get(participant.agentVersionId) as { operatorId: number } | undefined;
+      if (!row || row.operatorId !== participant.id) {
+        throw new Error("agent version is not owned by queued operator");
+      }
+    }
     const matchRecord: MatchRecord = {
       id: ctx.matchId,
       operatorAId: ctx.a.id,
       operatorBId: ctx.b.id,
-      agentAId: 0,
-      agentBId: 0,
+      agentAId: ctx.a.agentVersionId,
+      agentBId: ctx.b.agentVersionId,
       originTag: "ladder:pending",
       outcome: null,
       createdAt: Date.now(),
@@ -148,6 +160,11 @@ export class MatchRunner {
         withTimeout(receivePlanFromChannel(channels.b), turnTimeoutMs),
       ]);
 
+      if (channels.a.closed || channels.b.closed) {
+        const winnerId = channels.a.closed && channels.b.closed ? null
+          : channels.a.closed ? ctx.b.id : ctx.a.id;
+        return this.endForfeit(ctx.matchId, winnerId);
+      }
       if (!resA.ok || !resB.ok) {
         if (!resA.ok && !resB.ok) return this.endTimeout(ctx.matchId, null);
         if (!resA.ok) return this.endTimeout(ctx.matchId, ctx.b.id);
