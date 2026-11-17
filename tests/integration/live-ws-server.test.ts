@@ -32,7 +32,7 @@ function openBot(url: string, token: string): Bot {
   const frames: Record<string, unknown>[] = [];
   const ready = new Promise<void>((resolve, reject) => {
     socket.addEventListener("open", () => resolve(), { once: true });
-    socket.addEventListener("error", () => reject(new Error("agent WS upgrade failed")), { once: true });
+    socket.addEventListener("error", (event) => reject(new Error(`agent WS upgrade failed: ${String((event as ErrorEvent).message ?? "unknown")}`)), { once: true });
   });
   const end = new Promise<Record<string, unknown>>((resolve, reject) => {
     socket.addEventListener("message", (event) => {
@@ -47,8 +47,10 @@ function openBot(url: string, token: string): Bot {
       if (frame.type === "END") resolve(frame);
       if (frame.type === "ERROR" && frame.code === "match_runtime_failed") reject(new Error("match runtime failed"));
     });
-    socket.addEventListener("close", () => reject(new Error("WS closed before match completed")), { once: true });
+    socket.addEventListener("close", (event) => reject(new Error(`WS closed before match completed; code=${event.code}, reason=${event.reason}, received=${frames.map(f => String(f.type)).join(",")}`)), { once: true });
   });
+  // The runner can reject on close before a caller attaches the match completion await.
+  void end.catch(() => {});
   return { socket, ready, end, frames };
 }
 
@@ -119,6 +121,11 @@ test("two real authenticated WebSockets finish a match and fetch persisted repla
     const data = await replay.json() as { events: Array<{ eventType: string; payload: string }> };
     expect(data.events.length).toBeGreaterThan(0);
     expect(data.events.at(-1)?.eventType).toBe("match_seed_revealed");
+  } catch (error) {
+    server.kill();
+    await server.exited;
+    const stderr = server.stderr ? await new Response(server.stderr).text() : "";
+    throw new Error(`live network acceptance: ${String(error)}; server stderr: ${stderr.slice(-3500)}`);
   } finally {
     for (const bot of bots) bot.socket.close();
     server.kill();
