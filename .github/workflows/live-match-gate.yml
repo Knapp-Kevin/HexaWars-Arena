@@ -3,6 +3,10 @@ name: HexaWars live match gate
 on:
   pull_request:
     paths:
+      - "README.md"
+      - "docs/LIVE_AGENT_PROTOCOL_ALPHA.md"
+      - "examples/**"
+      - "scripts/type-error-ratchet.mjs"
       - "src/gateway/live-*.ts"
       - "src/gateway/spectator-ws.ts"
       - "src/matchmaker/loop.ts"
