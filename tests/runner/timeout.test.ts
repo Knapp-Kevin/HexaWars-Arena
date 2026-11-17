@@ -27,6 +27,7 @@ function makeTempDb() {
       PRIMARY KEY (match_id, seq)
     );
   `);
+  db.exec("CREATE TABLE agent_versions (id INTEGER PRIMARY KEY, operator_id INTEGER NOT NULL); INSERT INTO agent_versions VALUES (10,10),(20,20)");
   return db;
 }
 
@@ -63,9 +64,10 @@ describe("MatchRunner timeout", () => {
     const runner = new MatchRunner(db);
     const ctx: RunnerContext = {
       matchId: "timeout-never-1",
+      seed: "fixture-seed-timeout-never-1",
       ladderId: "ladder-1",
-      a: { id: 10, name: "OpA" },
-      b: { id: 20, name: "OpB" },
+      a: { id: 10, agentVersionId: 10, name: "OpA" },
+      b: { id: 20, agentVersionId: 20, name: "OpB" },
     };
     // A never responds; B always passes
     const channels = { a: neverResolvesChannel(10), b: instantPassChannel(20) };
@@ -81,9 +83,10 @@ describe("MatchRunner timeout", () => {
     const runner = new MatchRunner(db);
     const ctx: RunnerContext = {
       matchId: "timeout-never-2",
+      seed: "fixture-seed-timeout-never-2",
       ladderId: "ladder-1",
-      a: { id: 10, name: "OpA" },
-      b: { id: 20, name: "OpB" },
+      a: { id: 10, agentVersionId: 10, name: "OpA" },
+      b: { id: 20, agentVersionId: 20, name: "OpB" },
     };
     // B never responds; A always passes
     const channels = { a: instantPassChannel(10), b: neverResolvesChannel(20) };
@@ -98,9 +101,10 @@ describe("MatchRunner timeout", () => {
     const runner = new MatchRunner(db);
     const ctx: RunnerContext = {
       matchId: "timeout-turnlimit-1",
+      seed: "fixture-seed-timeout-turnlimit-1",
       ladderId: "ladder-1",
-      a: { id: 10, name: "OpA" },
-      b: { id: 20, name: "OpB" },
+      a: { id: 10, agentVersionId: 10, name: "OpA" },
+      b: { id: 20, agentVersionId: 20, name: "OpB" },
     };
     const channels = { a: instantPassChannel(10), b: instantPassChannel(20) };
 
