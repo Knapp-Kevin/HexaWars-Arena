@@ -115,6 +115,20 @@ function makeGeometry() {
     cap([x,y+height,z],top,shade(color,1.14));
     shell(top,bottom,color);
   }
+  // Rigid accessories: armor plates, tracked chassis, shields, and barrels.
+  // All surfaces are geometry, not baked image textures.
+  function box(x,z,y,width,height,depth,color,rotation=0) {
+    const c=Math.cos(rotation), sn=Math.sin(rotation);
+    const p=(dx,dz,dy)=>[x+dx*c-dz*sn,y+dy,z+dx*sn+dz*c];
+    const w=width/2,d=depth/2;
+    const a=p(-w,-d,0),b=p(w,-d,0),c1=p(w,d,0),d1=p(-w,d,0);
+    const e=p(-w,-d,height),f=p(w,-d,height),g=p(w,d,height),h=p(-w,d,height);
+    tri(e,f,g,shade(color,1.16));tri(e,g,h,shade(color,1.16));
+    tri(a,e,h,shade(color,.75));tri(a,h,d1,shade(color,.75));
+    tri(b,c1,g,shade(color,.81));tri(b,g,f,shade(color,.81));
+    tri(d1,h,g,shade(color,.89));tri(d1,g,c1,shade(color,.89));
+    tri(a,b,f,shade(color,.70));tri(a,f,e,shade(color,.70));
+  }
   function tile(cell) {
     const [x,z]=axialToWorld(cell), kind=terrainKind(cell.terrain);
     let color=COLOR[kind];
@@ -182,46 +196,71 @@ function makeGeometry() {
       }
     }
   }
-  function unit(piece,cell){
-    const [x,z]=axialToWorld(cell);
-    const y=HEIGHT[terrainKind(cell.terrain)];
+  function unit(piece,cell,pose={}) {
+    const [naturalX,naturalZ]=axialToWorld(cell);
+    const x=Number.isFinite(pose.x)?pose.x:naturalX;
+    const z=Number.isFinite(pose.z)?pose.z:naturalZ;
+    const lift=Number.isFinite(pose.lift)?Math.max(0,Math.min(.35,pose.lift)):0;
+    const y=HEIGHT[terrainKind(cell.terrain)]+lift;
     const team=PALETTE[piece.side];
     if(!team)return;
     const type=String(piece.type||"infantry").toLowerCase();
     const angle=piece.side==="A" ? 0 : Math.PI;
-    // Stepped colored bases and bright unit silhouettes remain distinguishable
-    // even if the camera is far enough to show the entire battlefield.
-    plate(x,z,y+.015,.31,.075,STEEL);
-    plate(x,z,y+.085,.27,.07,shade(team,.91));
-    const ground=y+.15;
-    const dark=shade(team,.48),bright=shade(team,1.25);
+    const dark=shade(team,.45),bright=shade(team,1.22);
+    const metal=[.27,.36,.43],gold=[.86,.71,.39],accent=[.66,.81,.90];
+    // All roles share the same faction identity, ground contact and selection
+    // silhouette, but none relies only on color to communicate its function.
+    plate(x,z,y+.012,.31,.078,STEEL);
+    plate(x,z,y+.087,.274,.066,bright);
+    const ground=y+.153;
     if(type==="siege"||type==="heavy"){
-      prism(x,z,ground,.21,.42,team,6,angle);
-      plate(x,z,ground+.42,.25,.10,bright,angle);
-      plate(x+.15*Math.cos(angle),z+.15*Math.sin(angle),ground+.35,.11,.10,dark,5);
+      // Low armored tank: two side tracks, hull, pivoting turret, long gun.
+      box(x,z-.18,ground,.40,.19,.12,dark,angle);
+      box(x,z+.18,ground,.40,.19,.12,dark,angle);
+      box(x,z,ground+.10,.49,.25,.34,team,angle);
+      plate(x,z,ground+.36,.22,.12,metal,angle);
+      box(x+.26*Math.cos(angle),z+.26*Math.sin(angle),ground+.40,.47,.10,.10,accent,angle);
+      box(x-.15*Math.cos(angle),z-.15*Math.sin(angle),ground+.37,.12,.15,.17,bright,angle);
     }else if(type==="captain"){
-      prism(x,z,ground,.18,.58,team,6,angle);
-      cone(x,z,ground+.58,.25,.37,bright,6,angle);
-      for(let i=0;i<3;i++){
-        const a=angle+TWO_PI*i/3;
-        cone(x+Math.cos(a)*.17,z+Math.sin(a)*.17,ground+.56,.071,.20,[.91,.77,.44],4,a);
-      }
+      // Command tower: tall armor, golden crest, forward command pennant.
+      prism(x,z,ground,.18,.52,team,6,angle);
+      box(x,z,ground+.36,.22,.15,.19,metal,angle);
+      cone(x,z,ground+.57,.21,.30,gold,6,angle);
+      box(x+.16*Math.cos(angle),z+.16*Math.sin(angle),ground+.40,.07,.42,.07,gold,angle);
+      tri([x,ground+1.02,z],[x+.26*Math.cos(angle),ground+.84,z+.26*Math.sin(angle)],[x,ground+.79,z],bright);
     }else if(type==="raider"){
-      cone(x,z,ground,.20,.68,team,5,angle);
-      cone(x+.21*Math.cos(angle),z+.21*Math.sin(angle),ground+.16,.08,.46,bright,4,angle);
-    }else if(type==="interceptor"){
-      prism(x,z,ground,.18,.31,team,6,angle);
+      // Fast flanking fighter: wedge hull, aerodynamic paired fins.
+      prism(x,z,ground,.22,.30,team,5,angle);
+      cone(x+.13*Math.cos(angle),z+.13*Math.sin(angle),ground+.18,.17,.44,bright,4,angle);
       for(const side of [-1,1]){
-        const sx=x+Math.cos(angle+Math.PI/2)*side*.18;
-        const sz=z+Math.sin(angle+Math.PI/2)*side*.18;
-        cone(sx,sz,ground+.26,.12,.31,bright,4,angle+.2);
+        const a=angle+Math.PI/2;
+        const fx=x+Math.cos(a)*.24*side,fz=z+Math.sin(a)*.24*side;
+        box(fx,fz,ground+.09,.27,.08,.12,dark,angle);
       }
-      cone(x,z,ground+.35,.14,.34,team,5,angle);
+      box(x,z,ground+.34,.10,.10,.14,accent,angle);
+    }else if(type==="interceptor"){
+      // Aerial-defense scout: twin outriggers, raised sensor bar.
+      box(x,z,ground,.37,.25,.29,team,angle);
+      for(const side of [-1,1]){
+        const a=angle+Math.PI/2;
+        const fx=x+Math.cos(a)*.22*side,fz=z+Math.sin(a)*.22*side;
+        box(fx,fz,ground+.19,.13,.24,.12,metal,angle);
+        cone(fx,fz,ground+.43,.08,.23,bright,4,angle);
+      }
+      box(x,z,ground+.26,.10,.38,.10,dark,angle);
+      box(x,z,ground+.63,.36,.06,.12,accent,angle);
     }else{
-      cone(x,z,ground,.17,.68,team,6,angle);
-      cone(x,z,ground+.46,.085,.29,bright,6,angle);
+      // Recon/infantry: small armored body, head, directional sensor staff.
+      box(x,z,ground,.24,.30,.22,team,angle);
+      box(x,z,ground+.30,.19,.15,.18,metal,angle);
+      cone(x,z,ground+.46,.13,.23,bright,6,angle);
+      box(x-.19*Math.cos(angle),z-.19*Math.sin(angle),ground+.12,.055,.47,.055,dark,angle);
+      plate(x-.19*Math.cos(angle),z-.19*Math.sin(angle),ground+.60,.08,.045,accent);
     }
-    // Gold chevrons identify leaders without exposing hidden information.
+    if(pose.hit){
+      const intensity=Math.max(0,Math.min(1,pose.hit));
+      plate(x,z,ground+.016,.34+.09*intensity,.02,[.95,.77,.39]);
+    }
   }
   return {
     tile,unit,
@@ -251,4 +290,27 @@ export function buildBattlefieldMesh(projection) {
     if(cell)geometry.unit(piece,cell);
   }
   return geometry.output();
+}
+
+/**
+ * Split terrain from animated units. This uses the pinned Verdant renderer's
+ * native static/dynamic upload API, avoiding terrain rebuilds during movement.
+ * Poses are coordinates from public snapshots, never authoritative actions.
+ */
+export function buildBattlefieldLayers(projection, poses = {}) {
+  const cells=projection?.board?.cells, units=projection?.board?.units;
+  if(!Array.isArray(cells)||!Array.isArray(units)) throw new Error("Invalid public projection");
+  const terrain=makeGeometry(), models=makeGeometry(), byCoord=new Map();
+  for (const cell of cells) {
+    if(!Number.isInteger(cell.q)||!Number.isInteger(cell.r)) throw new Error("Invalid projection coordinate");
+    const key=`${cell.q},${cell.r}`;
+    if(byCoord.has(key)) throw new Error("Duplicate projection hex");
+    byCoord.set(key,cell);
+    terrain.tile(cell);
+  }
+  for (const piece of units) {
+    const ground=byCoord.get(`${piece.q},${piece.r}`);
+    if(ground) models.unit(piece,ground,poses[piece.id]??{});
+  }
+  return {terrain:terrain.output(),units:models.output()};
 }
