@@ -57,6 +57,7 @@ for (const [from, to] of imports) {
 }
 await writeFile(join(out, "verdant.js"), viewer);
 await copyFile(resolve(repoRoot, "src/browser/battlefield-geometry.mjs"), join(out, "battlefield-geometry.mjs"));
+await copyFile(resolve(repoRoot, "src/browser/replay-motion.mjs"), join(out, "replay-motion.mjs"));
 await copyFile(resolve(repoRoot, "src/vendor/verdant/scene-renderer.mjs"), join(out, "scene-renderer.mjs"));
 
 const tokensDir = join(out, "tokens");
