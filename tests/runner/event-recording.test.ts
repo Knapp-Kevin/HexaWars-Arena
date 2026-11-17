@@ -18,6 +18,7 @@ describe("event recording", () => {
 
   beforeEach(() => {
     db = new Database(":memory:");
+    db.exec("CREATE TABLE agent_versions (id INTEGER PRIMARY KEY, operator_id INTEGER NOT NULL); INSERT INTO agent_versions VALUES (1,1),(2,2),(3,3),(4,4)");
     db.prepare(`CREATE TABLE IF NOT EXISTS matches (
       id TEXT PRIMARY KEY, operator_a_id INTEGER, operator_b_id INTEGER,
       agent_a_id INTEGER, agent_b_id INTEGER, origin_tag TEXT,
@@ -29,8 +30,9 @@ describe("event recording", () => {
     const runner = new MatchRunner(db);
     const ctx: RunnerContext = {
       matchId: "evt-test-match",
-      a: { id: 1, handle: "opA" },
-      b: { id: 2, handle: "opB" },
+      seed: "fixture-seed-evt-test-match",
+      a: { id: 1, agentVersionId: 1, handle: "opA" },
+      b: { id: 2, agentVersionId: 2, handle: "opB" },
     };
 
     await runner.start(ctx, { a: passChannel(), b: passChannel() });
@@ -51,8 +53,9 @@ describe("event recording", () => {
     const runner = new MatchRunner(db);
     const ctx: RunnerContext = {
       matchId: "evt-test-match-contig",
-      a: { id: 3, handle: "opC" },
-      b: { id: 4, handle: "opD" },
+      seed: "fixture-seed-evt-test-match-contig",
+      a: { id: 3, agentVersionId: 3, handle: "opC" },
+      b: { id: 4, agentVersionId: 4, handle: "opD" },
     };
 
     await runner.start(ctx, { a: passChannel(), b: passChannel() });
