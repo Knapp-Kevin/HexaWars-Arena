@@ -16,7 +16,11 @@ const COLOR = {
 };
 const HEIGHT = {plain:0.20, forest:0.31, hills:0.48, mountain:0.72, water:0.075};
 const PALETTE = {A:[0.17,0.53,0.94], B:[0.90,0.24,0.27]};
-const STEEL = [0.13, 0.19, 0.25];
+// Verdant packed color convention: floor(red) is material mode.
+// 0=diffuse, 1=animated water, 2=metal, 3=emissive. The fractional
+// red component remains the visible linearized base-color input.
+// This is a procedural material foundation, NOT UV texture skinning.
+const STEEL = [2.13, 0.19, 0.25];
 
 export function axialToWorld(cell) {
   return [
@@ -60,8 +64,16 @@ function mix(seed, salt=0) {
   x=Math.imul(x^(x>>>15),0x846ca68b);
   return ((x^(x>>>16))>>>0)/4294967296;
 }
-function shade(color,factor){return color.map(v=>Math.min(.96,Math.max(.02,v*factor)));}
-function addColor(color,amount){return color.map(v=>Math.min(.96,Math.max(.02,v+amount)));}
+function adjust(color,apply) {
+  const material=Math.floor(color[0]);
+  return color.map((value,i)=>{
+    const base=i===0?value-material:value;
+    const result=Math.min(.96,Math.max(.02,apply(base)));
+    return i===0?material+result:result;
+  });
+}
+function shade(color,factor){return adjust(color,v=>v*factor);}
+function addColor(color,amount){return adjust(color,v=>v+amount);}
 
 function makeGeometry() {
   const positions=[], normals=[], colors=[], indices=[];
@@ -136,6 +148,7 @@ function makeGeometry() {
     color=addColor(color,variance);
     if(cell.controlledBy==="A")color=[color[0]*.86,color[1]*.98,Math.min(.95,color[2]*1.18)];
     if(cell.controlledBy==="B")color=[Math.min(.95,color[0]*1.17),color[1]*.88,color[2]*.91];
+    if(kind==="water")color=[1+color[0],color[1],color[2]];
     const y=HEIGHT[kind], base=-.16;
     const inner=ring(x,z,y,HEX_RADIUS*.79);
     const bevel=ring(x,z,y-.067,HEX_RADIUS*.957);
@@ -184,7 +197,7 @@ function makeGeometry() {
         const a=[x+dx*.15,y+.012,z+dz*.15];
         const b=[x+dx*.34-dz*.085,y+.012,z+dz*.34+dx*.085];
         const c=[x+dx*.34+dz*.085,y+.012,z+dz*.34-dx*.085];
-        tri(a,b,c,[.17,.44,.57]);
+        tri(a,b,c,[1.17,.44,.57]);
       }
     }else{
       // Grasses, rocks and moss create detail without noisy random animation.
@@ -207,7 +220,7 @@ function makeGeometry() {
     const type=String(piece.type||"infantry").toLowerCase();
     const angle=piece.side==="A" ? 0 : Math.PI;
     const dark=shade(team,.45),bright=shade(team,1.22);
-    const metal=[.27,.36,.43],gold=[.86,.71,.39],accent=[.66,.81,.90];
+    const metal=[2.27,.36,.43],gold=[2.66,.55,.25],accent=[3.66,.81,.90];
     // All roles share the same faction identity, ground contact and selection
     // silhouette, but none relies only on color to communicate its function.
     plate(x,z,y+.012,.31,.078,STEEL);
