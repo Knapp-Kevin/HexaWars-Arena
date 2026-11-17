@@ -160,6 +160,9 @@ describe("MatchRunner forfeit", () => {
     const startPromise = runner.start(ctx, channels);
 
     channelA.close?.();
+    // This synthetic channel's close() only mutates a flag; drive its registered
+    // close callback to model the actual LiveAgentChannel disconnect signal.
+    closeHandlerA?.();
     await startPromise;
 
     const row = getMatch(db, "forfeit-persist-check");
