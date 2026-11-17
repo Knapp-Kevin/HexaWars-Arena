@@ -47,6 +47,7 @@ describe("MatchRunner", () => {
     const runner = new MatchRunner(db);
     const ctx: RunnerContext = {
       matchId: "phantom-must-refuse",
+      seed: "private-seed-phantom-must-refuse",
       a: { id: 10, agentVersionId: 1 }, b: { id: 20, agentVersionId: 2 },
     };
     const phantom: AgentChannel = { send: () => {} };
@@ -59,6 +60,7 @@ describe("MatchRunner", () => {
     const runner = new MatchRunner(db);
     const ctx: RunnerContext = {
       matchId: "wrong-version-owner",
+      seed: "private-seed-wrong-version-owner",
       a: { id: 10, agentVersionId: 2 },
       b: { id: 20, agentVersionId: 1 },
     };
@@ -71,6 +73,7 @@ describe("MatchRunner", () => {
     const runner = new MatchRunner(db);
     const ctx: RunnerContext = {
       matchId: "runner-skel-test-1",
+      seed: "private-seed-runner-skel-test-1",
       ladderId: "ladder-1",
       a: { id: 10, name: "OpA", agentVersionId: 1 },
       b: { id: 20, name: "OpB", agentVersionId: 2 },
@@ -90,6 +93,7 @@ describe("MatchRunner", () => {
     const runner = new MatchRunner(db);
     const ctx: RunnerContext = {
       matchId: "runner-skel-test-2",
+      seed: "private-seed-runner-skel-test-2",
       ladderId: "ladder-1",
       a: { id: 10, name: "OpA", agentVersionId: 1 },
       b: { id: 20, name: "OpB", agentVersionId: 2 },
@@ -109,6 +113,7 @@ describe("MatchRunner", () => {
     const runner = new MatchRunner(db);
     const ctx: RunnerContext = {
       matchId: "runner-skel-test-3",
+      seed: "private-seed-runner-skel-test-3",
       ladderId: "ladder-1",
       a: { id: 10, name: "OpA", agentVersionId: 1 },
       b: { id: 20, name: "OpB", agentVersionId: 2 },
