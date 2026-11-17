@@ -1,13 +1,13 @@
-import { renderBoard } from "./hex-render.js?v=20260422b2";
-import { applyFog, clearFog } from "./fog-overlay.js?v=20260422b1";
-import { renderUnits } from "./unit-render.js?v=20260422b2";
-import { appendEvent, resetEventLog } from "./event-log.js?v=20260422b1";
-import { updateAgentStatus } from "./agent-status.js?v=20260422c4";
-import { updateAgentBubbles } from "./agent-bubbles.js?v=20260422d1";
-import { connectSpectator } from "./ws-client.js?v=20260422b1";
-import { DEMO_MATCH_ID, playDemoReplay } from "./demo-replay.js?v=20260422c5";
-import { installReplayKeyboard } from "./keyboard.js?v=20260422b1";
-import { mountUnitRoster } from "./unit-roster.js?v=20260422r1";
+import { renderBoard } from "./hex-render.js";
+import { applyFog, clearFog } from "./fog-overlay.js";
+import { renderUnits } from "./unit-render.js";
+import { appendEvent, resetEventLog } from "./event-log.js";
+import { updateAgentStatus } from "./agent-status.js";
+import { updateAgentBubbles } from "./agent-bubbles.js";
+import { connectSpectator } from "./ws-client.js";
+import { DEMO_MATCH_ID, playDemoReplay } from "./demo-replay.js";
+import { installReplayKeyboard } from "./keyboard.js";
+import { mountUnitRoster } from "./unit-roster.js";
 
 const boardEl = document.getElementById("board");
 const logEl = document.getElementById("eventLog");
