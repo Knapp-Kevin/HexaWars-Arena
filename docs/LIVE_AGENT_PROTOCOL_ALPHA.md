@@ -73,4 +73,4 @@ CI exercises a live spawned Bun process, two header-authenticated real WebSocket
 
 **Still pending:** a publicly deployed URL, meaningful strategic bots, ranked rating settlement, robust production auth/rate limits, live spectator frames driven by the current runner rather than the legacy runtime, state-hash replay parity, database-secret audit, HTML/browser onboarding, and Verdant rendering acceptance.
 
-The readiness gate is **not green** until these are demonstrated. See the bounded [revival RFC](rfcs/0001-browser-native-revival-verdant-feasibility.md) and [issue #1](https://github.com/Knapp-Kevin/HexaWars-Arena/issues/1).
+The readiness gate is **not green** until these are demonstrated. See the bounded [revival RFC PR #2](https://github.com/Knapp-Kevin/HexaWars-Arena/pull/2) and [issue #1](https://github.com/Knapp-Kevin/HexaWars-Arena/issues/1).
