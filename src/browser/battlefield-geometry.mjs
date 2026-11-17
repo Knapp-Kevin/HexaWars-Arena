@@ -314,3 +314,22 @@ export function buildBattlefieldLayers(projection, poses = {}) {
   }
   return {terrain:terrain.output(),units:models.output()};
 }
+
+/** Rebuild only visible models while Verdant retains static terrain buffers. */
+export function buildUnitsMesh(projection, poses = {}) {
+  const cells=projection?.board?.cells, units=projection?.board?.units;
+  if(!Array.isArray(cells)||!Array.isArray(units)) throw new Error("Invalid public projection");
+  const byCoord = new Map();
+  for(const cell of cells){
+    if(!Number.isInteger(cell.q)||!Number.isInteger(cell.r)) throw new Error("Invalid projection coordinate");
+    const key=`${cell.q},${cell.r}`;
+    if(byCoord.has(key))throw new Error("Duplicate projection hex");
+    byCoord.set(key,cell);
+  }
+  const models=makeGeometry();
+  for(const piece of units){
+    const ground=byCoord.get(`${piece.q},${piece.r}`);
+    if(ground) models.unit(piece,ground,poses[piece.id]??{});
+  }
+  return models.output();
+}
