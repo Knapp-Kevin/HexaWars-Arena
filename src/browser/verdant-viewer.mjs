@@ -4,7 +4,8 @@
  * Renderer source is vendored from a pinned Verdant revision; see THIRD_PARTY_NOTICES.
  */
 import { buildDemoFrames } from "../public/demo-replay.js";
-import { buildBattlefieldMesh, boardBounds } from "./battlefield-geometry.mjs";
+import { boardBounds, buildBattlefieldLayers, buildUnitsMesh } from "./battlefield-geometry.mjs";
+import { createReplayTransition, tweenReplay } from "./replay-motion.mjs";
 import {
   createBestRenderer,
   mat4Perspective,
@@ -30,6 +31,10 @@ const zoomOut = document.getElementById("camera-zoom-out");
 const resetCamera = document.getElementById("camera-reset");
 const zoomReadout = document.getElementById("zoom-readout");
 const tileCount = document.getElementById("tile-count");
+const mobilePrevious=document.getElementById("mobile-prev");
+const mobileNext=document.getElementById("mobile-next");
+const mobilePlay=document.getElementById("mobile-play");
+const compactRound=document.getElementById("compact-round");
 
 const frames = buildDemoFrames()
   .filter(frame => frame.type === "MATCH_HELLO" || frame.type === "MATCH_STATE")
@@ -55,31 +60,51 @@ let playback = null;
 let fatal = false;
 const pointers = new Map();
 let pinchSeparation = 0;
+let terrainEpoch=0, terrainGpu=null, animation=null, lastAnimationUpload=0;
+const reducedMotion=window.matchMedia("(prefers-reduced-motion: reduce)");
 tileCount.textContent = String(bounds.cells);
 
 slider.max = String(frames.length);
 slider.value = "1";
 
 /**
- * The geometry adapter is pure and is tested independently against every
- * public replay state. No rendering path adds off-board cells or private data.
+ * Static terrain and moving units use Verdant's split-buffer uploader.
+ * The replay snapshots remain the only authoritative data displayed.
  */
-function projectMesh(projection) {
-  return buildBattlefieldMesh(projection);
-}
-
 function displayFrame(next) {
-  if (!renderer) return;
+  if (!renderer)return;
+  const previous=frames[step],previousStep=step;
   step=(next+frames.length)%frames.length;
   const projection=frames[step];
-  const mesh=projectMesh(projection);
-  renderer.uploadPackedBuffers(mesh.pos,mesh.norm,mesh.col,mesh.idx);
-  // Replace the mesh only when the public replay frame changes.
+  const layers=buildBattlefieldLayers(projection);
+  terrainGpu={...layers.terrain,epoch:++terrainEpoch};
+  renderer.uploadSplitBuffers(terrainGpu,layers.units);
+  const motion=previousStep!==step
+    ? createReplayTransition(previous,projection)
+    : {moves:[],hits:[],duration:0};
+  animation=(!reducedMotion.matches && (motion.moves.length||motion.hits.length))
+    ? {motion,start:performance.now()}:null;
+  canvas.dataset.animationState=animation?"playing":"idle";
+  canvas.dataset.movingUnits=String(motion.moves.length);
   slider.value=String(step+1);
   roundText.textContent=`${step+1} / ${frames.length}`;
+  compactRound.textContent=`${step+1} / ${frames.length}`;
   headline.textContent=projection.featured?.headline ?? "Tactical deployment";
   blue.textContent=String(projection.board.units.filter(u=>u.side==="A").length);
   red.textContent=String(projection.board.units.filter(u=>u.side==="B").length);
+}
+function updateAnimatedUnits(now) {
+  if(!animation)return;
+  if(now-lastAnimationUpload<33)return;  // cap dynamic buffer uploads ~30 Hz
+  const {motion,start}=animation;
+  const fraction=Math.min(1,(now-start)/motion.duration);
+  const unitMesh=buildUnitsMesh(frames[step],tweenReplay(motion,fraction));
+  renderer.uploadSplitBuffers(terrainGpu,unitMesh);
+  lastAnimationUpload=now;
+  if(fraction>=1){
+    animation=null;
+    canvas.dataset.animationState="idle";
+  }
 }
 
 function updateCameraLabels(){
@@ -110,6 +135,7 @@ function resizeCanvas() {
 function draw(now) {
   if(fatal)return;
   resizeCanvas();
+  updateAnimatedUnits(now);
   const aspect=Math.max(.25,canvas.width/Math.max(1,canvas.height));
   const eye=[
     target[0]+Math.sin(yaw)*Math.cos(elevation)*distance,
@@ -129,11 +155,15 @@ function stopReplay(){
   if(playback!==null)clearInterval(playback);
   playback=null;
   play.textContent="Play replay";
+  mobilePlay.textContent="▶";
+  mobilePlay.setAttribute("aria-label","Play replay");
   play.setAttribute("aria-pressed","false");
 }
 function toggleReplay(){
   if(playback!==null){stopReplay();return;}
   play.textContent="Pause replay";
+  mobilePlay.textContent="Ⅱ";
+  mobilePlay.setAttribute("aria-label","Pause replay");
   play.setAttribute("aria-pressed","true");
   playback=setInterval(()=>displayFrame(step+1),1250);
 }
@@ -142,6 +172,9 @@ slider.addEventListener("input",()=>{stopReplay();displayFrame(Number(slider.val
 stepPrevious.addEventListener("click",()=>{stopReplay();displayFrame(step-1);});
 stepNext.addEventListener("click",()=>{stopReplay();displayFrame(step+1);});
 play.addEventListener("click",toggleReplay);
+mobilePrevious.addEventListener("click",()=>stepPrevious.click());
+mobileNext.addEventListener("click",()=>stepNext.click());
+mobilePlay.addEventListener("click",()=>play.click());
 // Wheel, keyboard, explicit zoom controls and touch pinch share the same
 // bounded camera model. Pointer movement orbits; Shift+drag pans.
 zoomIn.addEventListener("click",()=>setDistance(distance/1.25));
