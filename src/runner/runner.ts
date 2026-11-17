@@ -6,6 +6,7 @@ import { newBudget, PASS_PLAN } from "../engine/round-state.ts";
 import { ROUND_CAP } from "../engine/constants.ts";
 import { validateRoundPlan } from "../gateway/validator.ts";
 import { checkVictory } from "../engine/victory.ts";
+import { projectSeatObservation } from "../gateway/observation.ts";
 import {
   saveMatch,
   appendEvents,
@@ -22,10 +23,13 @@ import type {
 const DEFAULT_TURN_TIMEOUT_MS = 5000;
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<{ ok: true; value: T } | { ok: false }> {
-  return Promise.race([
-    promise.then((value) => ({ ok: true as const, value })),
-    new Promise<{ ok: false }>((resolve) => setTimeout(() => resolve({ ok: false }), ms)),
-  ]);
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve({ ok: false }), ms);
+    promise.then(
+      (value) => { clearTimeout(timer); resolve({ ok: true, value }); },
+      () => { clearTimeout(timer); resolve({ ok: false }); },
+    );
+  });
 }
 
 function isRoundPlanMessage(message: unknown): message is { plan: RoundPlan } {
@@ -80,11 +84,7 @@ function sendRoundFrame(
   state: MatchState,
   budget: AgentRoundBudget,
 ): void {
-  if (channel.receivePlan) {
-    channel.send({ state, budget });
-    return;
-  }
-  channel.send(state as unknown as { state: MatchState; budget: AgentRoundBudget });
+  channel.send({ state, budget });
 }
 
 export class MatchRunner {
@@ -95,6 +95,13 @@ export class MatchRunner {
     channels: { a: AgentChannel; b: AgentChannel },
     turnTimeoutMs = DEFAULT_TURN_TIMEOUT_MS,
   ): Promise<RunnerResult> {
+    // A ranked match must have two real response channels. Previously an empty
+    // channel silently played PASS_PLAN every turn and could earn a fake result.
+    for (const [side, channel] of [["A", channels.a], ["B", channels.b]] as const) {
+      if (!channel.receivePlan && !channel.onMessage) {
+        throw new Error(`missing live plan input for side ${side}`);
+      }
+    }
     const matchRecord: MatchRecord = {
       id: ctx.matchId,
       operatorAId: ctx.a.id,
@@ -133,9 +140,8 @@ export class MatchRunner {
         return this.endTimeout(ctx.matchId, null);
       }
 
-      const publicState: MatchState = { ...state, roundCap: ROUND_CAP };
-      sendRoundFrame(channels.a, publicState, budgetA);
-      sendRoundFrame(channels.b, publicState, budgetB);
+      sendRoundFrame(channels.a, projectSeatObservation(state, "A"), budgetA);
+      sendRoundFrame(channels.b, projectSeatObservation(state, "B"), budgetB);
 
       const [resA, resB] = await Promise.all([
         withTimeout(receivePlanFromChannel(channels.a), turnTimeoutMs),
