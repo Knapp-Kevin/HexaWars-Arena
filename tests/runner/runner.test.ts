@@ -23,7 +23,8 @@ function makeTempDb() {
 
 function fakeChannel(id: number): AgentChannel {
   return {
-    send: async () => ({ type: "action", action: { type: "pass" } as any }),
+    send: () => {},
+    receivePlan: async () => ({ bid: 0, extras: [] }),
     dispose: () => {},
     operatorId: id,
   };
@@ -38,6 +39,18 @@ describe("MatchRunner", () => {
 
   afterEach(() => {
     db.close();
+  });
+
+  it("rejects disconnected phantom opponents before persisting a ranked match", async () => {
+    const runner = new MatchRunner(db);
+    const ctx: RunnerContext = {
+      matchId: "phantom-must-refuse",
+      a: { id: 10 }, b: { id: 20 },
+    };
+    const phantom: AgentChannel = { send: () => {} };
+    await expect(runner.start(ctx, { a: phantom, b: fakeChannel(20) }, 10))
+      .rejects.toThrow("missing live plan input for side A");
+    expect(getMatch(db, ctx.matchId)).toBeNull();
   });
 
   it("start() persists a match row", async () => {
