@@ -108,6 +108,16 @@
       aside .panel .slider{margin:4px 0}
       footer{display:none}
     }
+
+    /* Phone is a game viewport first: avoid a tall, empty software-demo panel. */
+    @media(max-width:850px){
+      .layout{min-height:0}
+      .stage{display:block;min-height:0}
+      .viewport{height:clamp(370px,60dvh,530px);min-height:0;max-height:530px;flex:none}
+      .hud{max-width:calc(100% - 16px);right:8px}
+      .camera-tools{top:auto;bottom:72px;right:8px;max-width:none;flex-wrap:nowrap}
+      .terrain-badge{display:none}
+    }
   </style>
   <script type="module" src="./verdant.js"></script>
 </head>
