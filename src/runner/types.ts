@@ -2,6 +2,8 @@ import type { MatchState, AgentRoundBudget, RoundPlan } from "../shared/types.ts
 
 export interface OperatorRef {
   id: number;
+  /** Immutable agent version selected for this exact match. */
+  agentVersionId: number;
   name?: string;
   handle?: string;
   operator?: string;
