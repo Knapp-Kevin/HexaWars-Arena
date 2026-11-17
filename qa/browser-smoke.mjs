@@ -94,6 +94,7 @@ async function verifyClassic() {
 
 async function verifyVerdant() {
   const page = await newPage("verdant");
+  await page.emulateMedia({ reducedMotion: "no-preference" });
   const url = new URL("./verdant.html", base).href;
   const response = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
   assert(response?.ok(), `Verdant page HTTP ${response?.status()}`);
@@ -113,6 +114,14 @@ async function verifyVerdant() {
   await page.locator("#next").click();
   await page.waitForFunction(() =>
     document.querySelector("#round")?.textContent?.trim().startsWith("2 /"),
+    undefined, { timeout: 15000 });
+  await page.waitForFunction(() =>
+    document.querySelector("#verdant-stage")?.dataset.animationState === "playing",
+    undefined, { timeout: 15000 });
+  const movingUnits=Number(await page.locator("#verdant-stage").getAttribute("data-moving-units"));
+  assert(movingUnits>0,"No visible unit movement between public replay snapshots");
+  await page.waitForFunction(() =>
+    document.querySelector("#verdant-stage")?.dataset.animationState === "idle",
     undefined, { timeout: 15000 });
 
   const canvas = page.locator("#verdant-stage");
@@ -171,8 +180,46 @@ async function verifyMobileViewport() {
     undefined, {timeout:30000});
   const width = await page.locator("#verdant-stage").evaluate(el=>el.getBoundingClientRect().width);
   assert(width >= 330 && width < 390, `Invalid mobile viewport width: ${width}`);
+  const layout=await page.evaluate(()=>{
+    const stage=document.querySelector("#verdant-stage").getBoundingClientRect();
+    const title=document.querySelector(".hud").getBoundingClientRect();
+    const camera=document.querySelector(".camera-tools").getBoundingClientRect();
+    return {
+      stageHeight:stage.height,
+      overlap:Math.max(0,Math.min(title.right,camera.right)-Math.max(title.left,camera.left)) *
+        Math.max(0,Math.min(title.bottom,camera.bottom)-Math.max(title.top,camera.top)),
+    };
+  });
+  assert(layout.stageHeight>=365&&layout.stageHeight<=535,
+    `Mobile stage is too tall for a playable composition: ${layout.stageHeight}px`);
+  assert(layout.overlap===0,"Camera buttons overlap the match headline");
   const toolbar = page.locator(".camera-tools");
   assert(await toolbar.isVisible(), "Camera tools hidden on mobile");
+  assert(await page.locator(".mobile-playback").isVisible(), "Mobile replay dock missing");
+  assert(await page.locator(".mobile-score").isVisible(), "Mobile faction count missing");
+  assert.equal((await page.locator("#mobile-blue-count").innerText()).trim(),"5");
+  assert.equal((await page.locator("#mobile-red-count").innerText()).trim(),"5");
+  assert(!await page.locator("aside>section.panel:first-child").isVisible(),
+    "Mobile exposes duplicate desktop replay controls");
+  assert(!await page.locator(".intro p:not(.eyebrow)").isVisible(),
+    "Mobile UI should not open with explanatory developer prose");
+  assert(!await page.locator(".field-guide").evaluate(el => el.open),
+    "The field guide should be collapsed initially");
+  await page.locator("#mobile-next").click();
+  await page.waitForFunction(() =>
+    document.querySelector("#compact-round")?.textContent?.trim().startsWith("2 /"),
+    undefined, { timeout:15000 });
+  await page.locator("#mobile-prev").click();
+  await page.waitForFunction(() =>
+    document.querySelector("#compact-round")?.textContent?.trim().startsWith("1 /"),
+    undefined, { timeout:15000 });
+  const metrics=await page.evaluate(()=>({
+    scrollWidth:document.documentElement.scrollWidth,
+    viewportWidth:window.innerWidth,
+    stageY:document.querySelector("#verdant-stage").getBoundingClientRect().top,
+  }));
+  assert(metrics.scrollWidth<=metrics.viewportWidth+2,"Mobile interface causes horizontal overflow");
+  assert(metrics.stageY<130,"Game battlefield is pushed below developer prose");
   const mobileCanvas=page.locator("#verdant-stage");
   const overview = Number(await mobileCanvas.getAttribute("data-camera-distance"));
   assert(overview > 15, `Mobile camera did not adapt to narrow viewport: ${overview}`);
