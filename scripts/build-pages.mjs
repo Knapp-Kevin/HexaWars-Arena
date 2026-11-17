@@ -74,6 +74,7 @@ await copyFile(resolve(repoRoot, "src/vendor/verdant/LICENSE-MIT"), join(out, "L
 await copyFile(resolve(repoRoot, "src/vendor/verdant/LICENSE-APACHE"), join(out, "LICENSE-APACHE.txt"));
 await copyFile(resolve(repoRoot, "src/browser/THIRD_PARTY_NOTICES.md"), join(out, "THIRD_PARTY_NOTICES.md"));
 
+const faviconLink = `<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230b1725'/%3E%3Cpath d='M32 8 54 20v24L32 56 10 44V20Z' fill='none' stroke='%2385baff' stroke-width='6'/%3E%3C/svg%3E">`;
 let html = await readFile(join(pub, "arena.html"), "utf8");
 html = html
   .replace('<html lang="en">', '<html lang="en" data-pages="true">')
@@ -88,6 +89,7 @@ html = html
   .replace('<a href="./arena.html" class="footer-action">Go Live</a>',
            '<a href="./verdant.html" class="footer-action">3D battlefield</a>');
 
+html = html.replace("</head>", `  ${faviconLink}\n</head>`);
 if (!html.includes('data-pages="true"') ||
     !html.includes('href="./verdant.html"') ||
     html.includes("/arena/static/") ||
@@ -96,6 +98,8 @@ if (!html.includes('data-pages="true"') ||
 }
 await writeFile(join(out, "index.html"), html);
 await writeFile(join(out, "arena.html"), html);
-await copyFile(resolve(repoRoot, "src/browser/verdant.html"), join(out, "verdant.html"));
+const verdantHtml = await readFile(resolve(repoRoot, "src/browser/verdant.html"), "utf8");
+await writeFile(join(out, "verdant.html"),
+  verdantHtml.replace("</head>", `  ${faviconLink}\n</head>`));
 await writeFile(join(out, ".nojekyll"), "");
 console.log(`Node-only GitHub Pages build complete: ${jsFiles.length} JS modules, ${cssFiles.length} styles, ${tokens.length} images + pinned Verdant renderer`);
