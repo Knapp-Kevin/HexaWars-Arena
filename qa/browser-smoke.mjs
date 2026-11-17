@@ -180,6 +180,19 @@ async function verifyMobileViewport() {
     undefined, {timeout:30000});
   const width = await page.locator("#verdant-stage").evaluate(el=>el.getBoundingClientRect().width);
   assert(width >= 330 && width < 390, `Invalid mobile viewport width: ${width}`);
+  const layout=await page.evaluate(()=>{
+    const stage=document.querySelector("#verdant-stage").getBoundingClientRect();
+    const title=document.querySelector(".hud").getBoundingClientRect();
+    const camera=document.querySelector(".camera-tools").getBoundingClientRect();
+    return {
+      stageHeight:stage.height,
+      overlap:Math.max(0,Math.min(title.right,camera.right)-Math.max(title.left,camera.left)) *
+        Math.max(0,Math.min(title.bottom,camera.bottom)-Math.max(title.top,camera.top)),
+    };
+  });
+  assert(layout.stageHeight>=365&&layout.stageHeight<=535,
+    `Mobile stage is too tall for a playable composition: ${layout.stageHeight}px`);
+  assert(layout.overlap===0,"Camera buttons overlap the match headline");
   const toolbar = page.locator(".camera-tools");
   assert(await toolbar.isVisible(), "Camera tools hidden on mobile");
   assert(await page.locator(".mobile-playback").isVisible(), "Mobile replay dock missing");
