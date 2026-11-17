@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#07111d">
+  <meta name="description" content="Play HexaWars Arena in your browser. An unranked, offline hex-grid tactics match against the house bot.">
+  <title>HexaWars Arena | Play</title>
+  <link rel="stylesheet" href="./play.css">
+  <script type="module" src="./play.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#board-heading">Skip to battlefield</a>
+  <div class="app">
+    <header class="topbar">
+      <a class="brand" href="./" aria-label="HexaWars Arena home">
+        <span class="brand-mark" aria-hidden="true">⬡</span>
+        <span class="brand-copy"><strong>HEXAWARS</strong><small>ARENA</small></span>
+      </a>
+      <div class="top-links">
+        <span class="status-chip"><span class="status-light"></span> Browser practice</span>
+        <a href="https://github.com/Knapp-Kevin/HexaWars-Arena" target="_blank" rel="noopener noreferrer">Source & rules</a>
+      </div>
+    </header>
+
+    <section class="intro">
+      <div>
+        <p class="eyebrow">TACTICAL COMMAND / SOLO PRACTICE</p>
+        <h1>The field is yours.</h1>
+        <p>Command the blue squad against a tactical bot. Choose a unit, plan a move or attack, then resolve both sides together.</p>
+      </div>
+      <div class="practice-label"><strong>LOCAL MATCH</strong><span>No account · No ranking · No server required</span></div>
+    </section>
+
+    <main class="layout">
+      <aside class="rail rail-left" aria-label="Match details">
+        <section class="panel">
+          <p class="eyebrow">MISSION STATUS</p>
+          <h2 id="game-phase">Opening scan</h2>
+          <div class="metric-row"><span>Round</span><strong id="round-label">0 / 50</strong></div>
+          <div class="meter"><div id="round-progress"></div></div>
+          <div class="metric-row"><span>Blue territory</span><strong class="blue" id="score-a">0</strong></div>
+          <div class="metric-row"><span>Red territory</span><strong class="red" id="score-b">0</strong></div>
+          <div class="metric-row"><span>Blue units</span><strong id="units-a">3</strong></div>
+          <div class="metric-row"><span>Red units seen</span><strong id="units-b">0</strong></div>
+        </section>
+        <section class="panel">
+          <p class="eyebrow">FIELD MANUAL</p>
+          <h2>How to play</h2>
+          <ol class="manual">
+            <li>Select a <b>blue unit</b> on the battlefield.</li>
+            <li>Choose <b>Move</b> or <b>Attack</b>.</li>
+            <li>Click a glowing legal target to queue an order.</li>
+            <li>Submit the round. The red bot responds automatically.</li>
+          </ol>
+          <p class="subtle">One free move and one free attack per round. Scout moves exactly 3 hexes, infantry 2, heavy 1. Fog hides enemy positions outside your units’ sight.</p>
+        </section>
+      </aside>
+
+      <section class="battlefield panel" aria-labelledby="board-heading">
+        <div class="battle-head">
+          <div><p class="eyebrow">LIVE BOARD / LOCAL SIMULATION</p><h2 id="board-heading">The contested grid</h2></div>
+          <div class="teams"><span class="team team-blue">BLUE · YOU</span><span class="versus">VS</span><span class="team team-red">RED · BOT</span></div>
+        </div>
+        <div class="board-container">
+          <svg id="board" role="group" aria-label="Interactive hex battlefield; select a friendly unit, then a legal destination" viewBox="-360 -225 720 450" preserveAspectRatio="xMidYMid meet"></svg>
+        </div>
+        <div class="legend"><span><i class="swatch plain"></i> Plain</span><span><i class="swatch forest"></i> Forest</span><span><i class="swatch mountain"></i> Mountain</span><span><i class="swatch water"></i> Water</span><span><i class="swatch fog"></i> Fog</span></div>
+        <div id="feedback" class="feedback" role="status" aria-live="polite">Select a blue unit to begin.</div>
+      </section>
+
+      <aside class="rail rail-right" aria-label="Command and match log">
+        <section class="panel">
+          <p class="eyebrow">COMMAND CONSOLE</p>
+          <h2>Issue orders</h2>
+          <div class="selected" id="selected-unit" aria-live="polite">No unit selected</div>
+          <div class="action-switch" role="group" aria-label="Order type">
+            <button class="action active" type="button" id="mode-move" aria-pressed="true">Move</button>
+            <button class="action" type="button" id="mode-attack" aria-pressed="false">Attack</button>
+          </div>
+          <div class="queued">
+            <div><span>Move</span><strong id="queued-move">Not queued</strong></div>
+            <div><span>Attack</span><strong id="queued-attack">Not queued</strong></div>
+          </div>
+          <button type="button" class="primary" id="submit-round">Resolve round</button>
+          <div class="button-pair">
+            <button type="button" id="clear-orders">Clear orders</button>
+            <button type="button" id="new-match">New match</button>
+          </div>
+          <p class="subtle">Unassigned orders count as passes. These results are not submitted to a leaderboard.</p>
+        </section>
+        <section class="panel log-panel">
+          <div class="log-header"><p class="eyebrow">AFTER-ACTION LOG</p><span id="log-count">0 entries</span></div>
+          <ol id="event-log" class="event-log" aria-label="Recent match events">
+            <li>Awaiting first round.</li>
+          </ol>
+        </section>
+      </aside>
+    </main>
+    <footer><span>HEXAWARS ARENA · BROWSER PRACTICE ALPHA</span><span>Runs locally on your device. Competitive multiplayer requires a separate authoritative service.</span></footer>
+  </div>
+</body>
+</html>
