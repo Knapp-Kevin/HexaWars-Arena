@@ -4,6 +4,7 @@
  * Renderer source is vendored from a pinned Verdant revision; see THIRD_PARTY_NOTICES.
  */
 import { buildDemoFrames } from "../public/demo-replay.js";
+import { buildBattlefieldMesh, boardBounds } from "./battlefield-geometry.mjs";
 import {
   createBestRenderer,
   mat4Perspective,
@@ -24,6 +25,11 @@ const red = document.getElementById("red-count");
 const play = document.getElementById("play");
 const stepPrevious = document.getElementById("prev");
 const stepNext = document.getElementById("next");
+const zoomIn = document.getElementById("camera-zoom-in");
+const zoomOut = document.getElementById("camera-zoom-out");
+const resetCamera = document.getElementById("camera-reset");
+const zoomReadout = document.getElementById("zoom-readout");
+const tileCount = document.getElementById("tile-count");
 
 const frames = buildDemoFrames()
   .filter(frame => frame.type === "MATCH_HELLO" || frame.type === "MATCH_STATE")
@@ -31,118 +37,35 @@ const frames = buildDemoFrames()
 if (!frames.length || !frames.every(frame => Array.isArray(frame?.board?.cells))) {
   throw new Error("HexaWars demo contains no usable public board projections");
 }
+const bounds = boardBounds(frames[0].board.cells);
+// Narrow screens need a longer overview distance or a valid symmetric board
+// is clipped by the horizontal field of view before the user zooms in.
+const canvasBox = canvas.getBoundingClientRect();
+const screenAspect = canvasBox.width / Math.max(1,canvasBox.height);
+const HOME_DISTANCE = Math.max(12.8,bounds.halfExtent*2.55) *
+  Math.max(1,1.10/Math.max(.5,screenAspect));
+const MIN_DISTANCE = Math.max(6.7, HOME_DISTANCE * 0.49);
+const MAX_DISTANCE = HOME_DISTANCE * 2.7;
+const HOME_YAW = 0.72, HOME_ELEVATION = 0.97;
 let step = 0;
 let renderer = null;
-let yaw = 0.68, elevation = 0.83, distance = 27;
+let yaw = HOME_YAW, elevation = HOME_ELEVATION, distance = HOME_DISTANCE;
+const target = [...bounds.center];
 let playback = null;
-let meshEpoch = 0;
-let dragging = false, pointerX = 0, pointerY = 0;
 let fatal = false;
+const pointers = new Map();
+let pinchSeparation = 0;
+tileCount.textContent = String(bounds.cells);
 
 slider.max = String(frames.length);
 slider.value = "1";
 
-const terrainStyle = {
-  plain: { height: .18, color: [0.22, 0.45, 0.40] },
-  plains: { height: .18, color: [0.22, 0.45, 0.40] },
-  forest: { height: .42, color: [0.14, 0.33, 0.23] },
-  hills: { height: .60, color: [0.45, 0.41, 0.31] },
-  mountain: { height: .96, color: [0.53, 0.58, 0.61] },
-  water: { height: .06, color: [0.12, 0.31, 0.45] },
-};
-const normalizeTerrain = value => terrainStyle[String(value ?? "plain").toLowerCase()] ?? terrainStyle.plain;
-const radius = .74, SQRT3 = Math.sqrt(3);
-
-function worldPos(cell) {
-  return [cell.q * (1.5 * radius), (cell.r + cell.q / 2) * (SQRT3 * radius)];
-}
-
-function tint(c, multiplier) {
-  return c.map(value => Math.max(0, Math.min(.96, value * multiplier)));
-}
-
-/** Non-shared triangle vertices keep each hex face normal correct. */
-function meshBuilder() {
-  const pos = [], norm = [], col = [], idx = [];
-  function tri(a, b, c, color) {
-    const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2];
-    const vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
-    let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
-    const n = Math.hypot(nx, ny, nz) || 1;
-    nx /= n; ny /= n; nz /= n;
-    for (const vertex of [a, b, c]) {
-      pos.push(...vertex);
-      norm.push(nx, ny, nz);
-      col.push(...color);
-      idx.push(idx.length);
-    }
-  }
-  function hex(q, r, altitude, color, size = radius, depth = .20) {
-    const [x,z] = worldPos({q,r});
-    const corners = Array.from({length:6},(_,k)=>{
-      const a = k*Math.PI/3;
-      return [x+Math.cos(a)*size, altitude, z+Math.sin(a)*size];
-    });
-    const centre = [x,altitude,z], base = altitude-depth;
-    for(let k=0;k<6;k++){
-      const now=corners[k], next=corners[(k+1)%6];
-      tri(centre,next,now,color);
-      const b1=[now[0],base,now[2]],b2=[next[0],base,next[2]];
-      tri(now,next,b1,tint(color,.68));
-      tri(b1,next,b2,tint(color,.68));
-    }
-  }
-  function unit(unitData, cell) {
-    const [x,z]=worldPos(cell);
-    const ground=normalizeTerrain(cell.terrain).height;
-    const heavy=["heavy","siege","captain"].includes(String(unitData.type).toLowerCase());
-    const baseRadius=heavy?.30:.22;
-    const height=heavy?.92:.66;
-    const color=unitData.side==="A" ? [0.16,0.49,0.91] : [0.86,0.22,0.25];
-    const top=[x,ground+height+.10,z];
-    const rim=Array.from({length:6},(_,k)=>{
-      const a=k*Math.PI/3;
-      return [x+Math.cos(a)*baseRadius,ground+.08,z+Math.sin(a)*baseRadius];
-    });
-    const base=[x,ground+.08,z];
-    for(let k=0;k<6;k++) {
-      const a=rim[k],b=rim[(k+1)%6];
-      tri(top,b,a,color);
-      tri(base,a,b,tint(color,.56));
-    }
-    // Outer base bevel: visibly different heights by role without implying
-    // any change to unit type, health, movement or combat properties.
-  }
-
-  return {
-    tri,hex,unit,
-    result:()=>({
-      pos:new Float32Array(pos), norm:new Float32Array(norm),
-      col:new Float32Array(col), idx:new Uint32Array(idx),
-    }),
-  };
-}
-
+/**
+ * The geometry adapter is pure and is tested independently against every
+ * public replay state. No rendering path adds off-board cells or private data.
+ */
 function projectMesh(projection) {
-  const b = meshBuilder();
-  const cells = projection.board.cells;
-  const byCell = new Map();
-  for (const cell of cells) {
-    if (!Number.isFinite(cell.q) || !Number.isFinite(cell.r)) continue;
-    const [x,z] = worldPos(cell);
-    void x; void z;
-    const style=normalizeTerrain(cell.terrain);
-    let color=style.color;
-    if(cell.controlledBy==="A")color=[color[0]*.75,color[1]*.92,Math.min(1,color[2]*1.6)];
-    if(cell.controlledBy==="B")color=[Math.min(1,color[0]*1.6),color[1]*.78,color[2]*.72];
-    b.hex(cell.q,cell.r,style.height,color);
-    byCell.set(`${cell.q},${cell.r}`,cell);
-  }
-  for (const unit of projection.board.units) {
-    const cell=byCell.get(`${unit.q},${unit.r}`);
-    if(cell)b.unit(unit,cell);
-  }
-  return b.result();
+  return buildBattlefieldMesh(projection);
 }
 
 function displayFrame(next) {
@@ -151,7 +74,7 @@ function displayFrame(next) {
   const projection=frames[step];
   const mesh=projectMesh(projection);
   renderer.uploadPackedBuffers(mesh.pos,mesh.norm,mesh.col,mesh.idx);
-  meshEpoch++;
+  // Replace the mesh only when the public replay frame changes.
   slider.value=String(step+1);
   roundText.textContent=`${step+1} / ${frames.length}`;
   headline.textContent=projection.featured?.headline ?? "Tactical deployment";
@@ -159,6 +82,24 @@ function displayFrame(next) {
   red.textContent=String(projection.board.units.filter(u=>u.side==="B").length);
 }
 
+function updateCameraLabels(){
+  zoomReadout.textContent = `${Math.round(100*HOME_DISTANCE/distance)}%`;
+  canvas.dataset.cameraDistance = distance.toFixed(3);
+  canvas.dataset.cameraYaw = yaw.toFixed(3);
+  canvas.dataset.cameraElevation = elevation.toFixed(3);
+  zoomIn.disabled = distance <= MIN_DISTANCE + .02;
+  zoomOut.disabled = distance >= MAX_DISTANCE - .02;
+}
+function setDistance(value){
+  distance = Math.max(MIN_DISTANCE, Math.min(MAX_DISTANCE, value));
+  updateCameraLabels();
+}
+function resetView(){
+  yaw = HOME_YAW;
+  elevation = HOME_ELEVATION;
+  target.splice(0,target.length,...bounds.center);
+  setDistance(HOME_DISTANCE);
+}
 function resizeCanvas() {
   const box=canvas.getBoundingClientRect();
   const dpr=Math.min(2,window.devicePixelRatio||1);
@@ -166,22 +107,20 @@ function resizeCanvas() {
   const h=Math.max(2,Math.round(box.height*dpr));
   if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}
 }
-
 function draw(now) {
   if(fatal)return;
   resizeCanvas();
   const aspect=Math.max(.25,canvas.width/Math.max(1,canvas.height));
   const eye=[
-    Math.sin(yaw)*Math.cos(elevation)*distance,
-    Math.sin(elevation)*distance,
-    Math.cos(yaw)*Math.cos(elevation)*distance,
+    target[0]+Math.sin(yaw)*Math.cos(elevation)*distance,
+    target[1]+Math.sin(elevation)*distance,
+    target[2]+Math.cos(yaw)*Math.cos(elevation)*distance,
   ];
-  const target=[0,0,0];
   const fov=Math.PI/3.4;
-  const projection=mat4Perspective(fov,aspect,.1,120);
+  const projection=mat4Perspective(fov,aspect,.1,140);
   const view=mat4LookAt(eye,target,[0,1,0]);
   renderer.render(mat4Mul(projection,view),eye,{
-    rank:2,sky:[.075,.14,.22],fog:[.14,.21,.30],
+    rank:2,sky:[.045,.105,.16],fog:[.095,.16,.23],
   },now/1000,target,fov);
   requestAnimationFrame(draw);
 }
@@ -203,23 +142,64 @@ slider.addEventListener("input",()=>{stopReplay();displayFrame(Number(slider.val
 stepPrevious.addEventListener("click",()=>{stopReplay();displayFrame(step-1);});
 stepNext.addEventListener("click",()=>{stopReplay();displayFrame(step+1);});
 play.addEventListener("click",toggleReplay);
+// Wheel, keyboard, explicit zoom controls and touch pinch share the same
+// bounded camera model. Pointer movement orbits; Shift+drag pans.
+zoomIn.addEventListener("click",()=>setDistance(distance/1.25));
+zoomOut.addEventListener("click",()=>setDistance(distance*1.25));
+resetCamera.addEventListener("click",resetView);
 canvas.addEventListener("pointerdown",event=>{
-  dragging=true;pointerX=event.clientX;pointerY=event.clientY;
+  pointers.set(event.pointerId,{x:event.clientX,y:event.clientY});
   canvas.setPointerCapture(event.pointerId);
+  if(pointers.size===2){
+    const [a,b]=[...pointers.values()];
+    pinchSeparation=Math.hypot(a.x-b.x,a.y-b.y);
+  }
 });
 canvas.addEventListener("pointermove",event=>{
-  if(!dragging)return;
-  yaw+=(event.clientX-pointerX)*.009;
-  elevation=Math.max(.28,Math.min(1.35,elevation+(pointerY-event.clientY)*.008));
-  pointerX=event.clientX;pointerY=event.clientY;
+  if(!pointers.has(event.pointerId))return;
+  const prev=pointers.get(event.pointerId);
+  pointers.set(event.pointerId,{x:event.clientX,y:event.clientY});
+  if(pointers.size===2){
+    const [a,b]=[...pointers.values()];
+    const separation=Math.hypot(a.x-b.x,a.y-b.y);
+    if(pinchSeparation>8&&separation>8){
+      setDistance(distance*pinchSeparation/separation);
+    }
+    pinchSeparation=separation;
+    return;
+  }
+  const dx=event.clientX-prev.x,dy=event.clientY-prev.y;
+  if(event.shiftKey){
+    const move=distance*.0016;
+    target[0]=Math.max(bounds.center[0]-bounds.halfExtent*.7,
+      Math.min(bounds.center[0]+bounds.halfExtent*.7,target[0]-dx*move));
+    target[2]=Math.max(bounds.center[2]-bounds.halfExtent*.7,
+      Math.min(bounds.center[2]+bounds.halfExtent*.7,target[2]+dy*move));
+  }else{
+    yaw+=dx*.009;
+    elevation=Math.max(.30,Math.min(1.43,elevation-dy*.008));
+  }
+  updateCameraLabels();
 });
-const release=()=>{dragging=false;};
+const release=event=>{
+  pointers.delete(event.pointerId);
+  pinchSeparation=0;
+};
 canvas.addEventListener("pointerup",release);
 canvas.addEventListener("pointercancel",release);
+canvas.addEventListener("lostpointercapture",release);
 canvas.addEventListener("wheel",event=>{
   event.preventDefault();
-  distance=Math.max(14,Math.min(46,distance+Math.sign(event.deltaY)*2));
+  setDistance(distance*Math.exp(Math.sign(event.deltaY)*.14));
 },{passive:false});
+canvas.addEventListener("keydown",event=>{
+  if(event.key==="+"||event.key==="="){event.preventDefault();setDistance(distance/1.2);}
+  if(event.key==="-"){event.preventDefault();setDistance(distance*1.2);}
+  if(event.key==="0"){event.preventDefault();resetView();}
+  if(event.key==="ArrowLeft"){event.preventDefault();yaw-=.11;updateCameraLabels();}
+  if(event.key==="ArrowRight"){event.preventDefault();yaw+=.11;updateCameraLabels();}
+});
+updateCameraLabels();
 window.addEventListener("visibilitychange",()=>{if(document.hidden)stopReplay();});
 
 try{

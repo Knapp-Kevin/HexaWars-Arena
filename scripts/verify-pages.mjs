@@ -26,7 +26,7 @@ for (const filename of files) {
 }
 const required = [
   "index.html", "arena.html", "verdant.html", "arena.js",
-  "verdant.js", "scene-renderer.mjs", "demo-replay.js", "public-match.js",
+  "verdant.js", "scene-renderer.mjs", "battlefield-geometry.mjs", "demo-replay.js", "public-match.js",
   ".nojekyll", "arena.css", "arena-core.css", "arena-shell.css",
   "arena-board.css", "arena-dialog.css", "LICENSE-MIT.txt",
   "LICENSE-APACHE.txt", "THIRD_PARTY_NOTICES.md",
@@ -52,6 +52,7 @@ assert(demo.includes("MATCH_HELLO") && demo.includes("MATCH_END"), "Replay not s
 assert(demo.includes('"./public-match.js"'), "Replay projection runtime unresolved");
 assert(!projection.includes("import type "), "Uncompiled TypeScript found in output");
 assert(verdant.includes("createBestRenderer"), "Actual Verdant rendering integration missing");
+assert(verdant.includes("./battlefield-geometry.mjs"), "Public Verdant geometry missing");
 assert(lab.includes('src="./verdant.js"'), "3D lab entry missing");
 
 // Every relative ESM import in the published modules must resolve into the
@@ -81,6 +82,14 @@ assert(frames[0]?.type === "MATCH_HELLO", "Replay does not start");
 assert(frames.at(-1)?.type === "MATCH_END", "Replay has no terminal frame");
 const states = frames.filter(f => ["MATCH_HELLO", "MATCH_STATE"].includes(f.type));
 assert(states.length >= 12, "Expected a complete tactical replay");
+const board = states[0].projection.board.cells;
+assert.equal(board.length,61,"Expected a symmetrical radius-four hex map");
+const positions = new Set(board.map(c=>`${c.q},${c.r}`));
+assert(board.every(c=>Math.max(Math.abs(c.q),Math.abs(c.r),Math.abs(c.q+c.r))<=4),
+       "Off-footprint hex cell leaked into replay");
+assert(board.every(c=>positions.has(`${-c.q},${-c.r}`)), "Asymmetric demo map");
+assert(states.every(f=>f.projection.board.cells.length === 61),
+       "Map footprint changed unexpectedly between replay rounds");
 assert(states.every(f => Array.isArray(f.projection?.board?.cells) &&
                          f.projection.board.cells.length > 0), "Missing replay terrain");
 assert(states.every(f => f.projection?.board?.units?.length > 0), "Missing replay units");

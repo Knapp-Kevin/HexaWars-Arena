@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#07101b">
-  <title>HexaWars Arena | Verdant 3D Lab</title>
+  <title>HexaWars Arena | 3D Battlefield</title>
   <meta name="description" content="View HexaWars Arena's tactical hex-grid replay in the Verdant Engine 3D renderer.">
   <style>
     :root { color-scheme:dark; font-family:system-ui,"Segoe UI",sans-serif; --bg:#07111c; --panel:#0d1c2b; --line:#30465d; --muted:#98aec7; --blue:#72b5ff;--gold:#eac38a }
@@ -17,7 +17,7 @@
     button:hover{background:#254765}
     button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-offset:3px}
     button[disabled]{opacity:.45;cursor:not-allowed}
-    .wrap{max-width:1480px;margin:auto;padding:0 24px}
+    .wrap{max-width:1650px;margin:auto;padding:0 24px}
     header{display:flex;align-items:center;justify-content:space-between;gap:16px;border-bottom:1px solid #2b4055;padding:18px 0}
     .brand{font-weight:800;letter-spacing:.14em;color:#f3f7ff}
     .brand span{color:var(--gold);font-size:25px;margin-right:9px}
@@ -29,10 +29,10 @@
     p{color:var(--muted);line-height:1.6}
     .intro p:last-child{max-width:620px;margin:0;font-size:14px}
     .pill{border:1px solid #60734a;color:#bfe9a0;border-radius:50px;padding:9px 13px;font-size:12px;white-space:nowrap;background:#2533297a}
-    .layout{display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:16px;min-height:560px}
+    .layout{display:grid;grid-template-columns:minmax(0,1fr) 276px;gap:16px;min-height:690px}
     .stage,.panel{background:linear-gradient(165deg,#132437,#0b1725);border:1px solid #344b60;border-radius:16px;box-shadow:0 17px 48px #0007}
     .stage{display:flex;flex-direction:column;padding:14px;min-width:0}
-    .viewport{position:relative;flex:1;min-height:430px;overflow:hidden;border-radius:11px;background:#0b2234}
+    .viewport{position:relative;flex:1;min-height:610px;overflow:hidden;border-radius:11px;background:#0b2234}
     canvas{width:100%;height:100%;display:block;touch-action:none;cursor:grab}
     canvas:active{cursor:grabbing}
     .hud{position:absolute;left:15px;top:14px;background:#071827c9;border:1px solid #386078;border-radius:10px;padding:11px 13px;pointer-events:none;font-size:12px;max-width:80%}
@@ -54,8 +54,16 @@
     .legend{display:flex;flex-wrap:wrap;gap:12px;color:#bed0e2;font-size:12px}
     .chip{width:9px;height:9px;display:inline-block;margin-right:5px;border-radius:2px}
     footer{display:flex;gap:18px;justify-content:space-between;flex-wrap:wrap;color:#7f9bb3;font-size:11px;margin:25px 0 35px;line-height:1.5}
-    @media(max-width:850px){.layout{grid-template-columns:1fr}.intro{align-items:start;flex-direction:column}.viewport{min-height:380px}aside{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr))}.wrap{padding:0 13px}}
+    @media(max-width:850px){.layout{grid-template-columns:1fr}.intro{align-items:start;flex-direction:column}.viewport{min-height:480px}aside{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr))}.wrap{padding:0 13px}}
     @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;animation:none!important}}
+    .camera-tools{position:absolute;right:16px;bottom:16px;display:flex;align-items:center;gap:7px;background:#071827e8;border:1px solid #54728a;border-radius:12px;padding:7px;box-shadow:0 6px 22px #0008}
+    .camera-tools button{min-width:42px;height:41px;display:grid;place-items:center;padding:7px 10px;font-size:19px;font-weight:700}
+    .camera-tools #camera-reset{min-width:65px;font-size:12px;font-weight:600}
+    .camera-tools output{min-width:54px;text-align:center;font-size:12px;font-weight:800;color:#e9f5ff;font-variant-numeric:tabular-nums}
+    .terrain-badge{position:absolute;left:16px;bottom:16px;max-width:55%;background:#071827e8;border:1px solid #54728a;border-radius:10px;padding:9px 12px;font-size:12px;color:#dceefa;pointer-events:none}
+    .terrain-badge strong{color:#ebd49e}
+    .camera-help{color:#b7ccdf}
+    @media(max-width:650px){.camera-tools{right:8px;bottom:8px;gap:3px;padding:5px}.camera-tools button{min-width:35px;height:35px}.camera-tools #camera-reset{min-width:46px}.camera-tools output{min-width:44px}.terrain-badge{left:8px;bottom:8px;max-width:42%;font-size:10px;padding:7px}.viewport{min-height:450px}}
   </style>
   <script type="module" src="./verdant.js"></script>
 </head>
@@ -67,22 +75,29 @@
     </header>
     <section class="intro">
       <div>
-        <p class="eyebrow">3D battlefield / Verdant renderer integration</p>
-        <h1>See the battlefield differently.</h1>
-        <p>HexaWars replay states rendered with the Verdant Engine WebGL2 scene renderer. Drag to orbit, scroll to zoom, and move through the recorded rounds. Simulation and rankings are not run here.</p>
+        <p class="eyebrow">Verdant Engine / Interactive 3D battlefield</p>
+        <h1>Every hex tells a story.</h1>
+        <p>Explore a balanced tactical hex arena with layered terrain, distinct unit silhouettes and direct camera controls. Orbit and zoom in for detail, or pull out for the entire battle. This is a scripted replay, not a live match.</p>
       </div>
-      <span class="pill">Visual integration alpha</span>
+      <span class="pill">Interactive 3D preview</span>
     </section>
     <main class="layout">
       <section class="stage" aria-labelledby="view-heading">
         <div class="viewport">
-          <canvas id="verdant-stage" width="1100" height="650" aria-label="Three dimensional hexagonal terrain with blue and red squad pieces"></canvas>
-          <div class="hud"><span id="view-heading">BATTLEFIELD PROJECTION</span><strong id="headline">Loading the tactical scene</strong></div>
+          <canvas id="verdant-stage" width="1100" height="650" tabindex="0" aria-label="Three dimensional tactical hex battlefield. Drag to orbit, Shift-drag to pan, wheel or plus/minus to zoom, zero to reset."></canvas>
+          <div class="hud"><span id="view-heading">BATTLEFIELD PROJECTION · SCRIPTED REPLAY</span><strong id="headline">Loading the tactical scene</strong></div>
+          <div class="terrain-badge" aria-label="Balanced arena size"><strong id="tile-count">61</strong> tactical hexes · balanced footprint</div>
+          <div class="camera-tools" role="group" aria-label="Battlefield camera controls">
+            <button id="camera-zoom-out" type="button" aria-label="Zoom out" title="Zoom out">−</button>
+            <output id="zoom-readout" aria-label="Camera zoom">100%</output>
+            <button id="camera-zoom-in" type="button" aria-label="Zoom in" title="Zoom in">+</button>
+            <button id="camera-reset" type="button" title="Reset camera">Reset</button>
+          </div>
           <div id="fallback" class="overlay" hidden role="status">
             <section><h2>3D rendering unavailable</h2><p id="fallback-text">Your browser may not support WebGL2.</p><p><a href="./">Open the classic SVG replay instead</a></p></section>
           </div>
         </div>
-        <div class="stage-footer"><span id="backend-label">Initializing renderer…</span><span>Drag to orbit · Wheel to zoom · Replay is a fixed sample</span></div>
+        <div class="stage-footer"><span id="backend-label">Initializing renderer…</span><span>Drag: orbit · Shift + drag: pan · Scroll / pinch: zoom · Focus canvas: + − 0 or arrows</span></div>
       </section>
       <aside>
         <section class="panel">
@@ -99,15 +114,15 @@
           <div class="row"><span>Active backend</span><strong id="backend-kind">Unknown</strong></div>
         </section>
         <section class="panel">
-          <p class="eyebrow">Scene breakdown</p><h2>Hex terrain</h2>
+          <p class="eyebrow">Tactical cartography</p><h2>Hex terrain</h2>
           <div class="legend">
-            <span><i class="chip" style="background:#3f7465"></i>Plain</span>
-            <span><i class="chip" style="background:#266047"></i>Forest</span>
-            <span><i class="chip" style="background:#909ca7"></i>Mountain</span>
-            <span><i class="chip" style="background:#215274"></i>Water</span>
+            <span><i class="chip" style="background:#4a8263"></i>Plain</span>
+            <span><i class="chip" style="background:#23543f"></i>Forest</span>
+            <span><i class="chip" style="background:#8c98a3"></i>Mountain</span>
+            <span><i class="chip" style="background:#1b4a73"></i>Water</span>
           </div>
-          <p class="small">This renderer consumes HexaWars' public board projection. It does not independently adjudicate combat, movement, visibility or victory.</p>
-          <p class="small">The camera and scene geometry are experimental. Gameplay remains defined by the HexaWars rules engine.</p>
+          <p class="small">Layered hex borders, varied elevations, forest trees, mountain peaks and role-specific squad silhouettes improve terrain and unit readability.</p><p class="small">The demo map is a symmetric 61-hex disk; authoritative rules are unchanged.</p>
+          <p class="small">Verdant renders this public scripted replay. Ranked play and authoritative simulation are not run here.</p>
         </section>
       </aside>
     </main>
