@@ -9,7 +9,7 @@ import { findPair } from './pair';
 export function startMatchmaker(deps: {
   queue: MatchQueue;
   presence: PresenceTracker;
-  onPair: (p: MatchPair) => void;
+  onPair: (p: MatchPair) => boolean | void;
   intervalMs?: number;
 }): { stop: () => void } {
   const intervalMs = deps.intervalMs ?? 1000;
@@ -20,7 +20,8 @@ export function startMatchmaker(deps: {
     if (!pair) return;
     if (!deps.presence.isOnline(pair.a.operatorId)) return;
     if (!deps.presence.isOnline(pair.b.operatorId)) return;
-    deps.onPair(pair);
+    // Refused starts remain queued rather than silently losing both competitors.
+    if (deps.onPair(pair) === false) return;
     deps.queue.dequeue(pair.a.operatorId);
     deps.queue.dequeue(pair.b.operatorId);
   }, intervalMs);
