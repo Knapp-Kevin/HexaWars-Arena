@@ -1,6 +1,6 @@
 # RFC 0001: Browser-native HexaWars revival and Verdant feasibility
 
-**Status:** Discovery / proposed. This RFC does **not** approve a rewrite, a rules change, or a production migration.  
+**Status:** Discovery record accepted for documentation only. This RFC does **not** approve a rewrite, a rules change, or a production migration.  
 **Date:** 2026-11-17  
 **Tracking:** [#1](https://github.com/Knapp-Kevin/HexaWars-Arena/issues/1)  
 **Scope:** HexaWars Arena only; independently hosted browser experience and externally connected agents.  
@@ -133,4 +133,19 @@ An optional **browser-hosted personal agent** can run in a Web Worker for local 
 
 A short decision record links (1) contract hash; (2) a full live two-agent match/replay trace and persisted result; (3) fog isolation adversarial tests; (4) fixed-seed browser/server parity output; (5) reproducible Verdant demo repository ref and precise API version; (6) measurements/fallback; (7) tracked-data risk disposition; (8) hosting architecture without Zo; (9) accessibility and player onboarding review.
 
-**Current decision: DISCOVERY / NO-GO for an untested full Verdant port. GO for a bounded renderer spike and core match-contract remediation.**
+**At the original baseline:** DISCOVERY / NO-GO for an untested full Verdant port; GO for a bounded renderer spike and core match-contract remediation.
+
+## 7. Implementation checkpoint (2026-11-17)
+
+This section records what happened **after** the frozen baseline above; the original baseline deficiencies are retained for traceability rather than rewritten as current claims.
+
+- [PR #3](https://github.com/Knapp-Kevin/HexaWars-Arena/pull/3) merged replay-preserving match outcomes and foreign-key regression tests.
+- [PR #4](https://github.com/Knapp-Kevin/HexaWars-Arena/pull/4) merged per-seat observation isolation and rejection of phantom agents.
+- [PR #5](https://github.com/Knapp-Kevin/HexaWars-Arena/pull/5) merged a locally accepted real two-agent Bun WebSocket/SQLite vertical slice. **This does not mean there is a hosted ranked game.**
+- [PR #7](https://github.com/Knapp-Kevin/HexaWars-Arena/pull/7) merged a static browser replay UI and the **actual pinned Verdant WebGL2 renderer**, with upstream license notices and a fallback to the classic SVG replay. This is a visual integration, **not** a full Verdant Rust/Wasm simulation port.
+- [PR #9](https://github.com/Knapp-Kevin/HexaWars-Arena/pull/9) merged a **Node-only GitHub Pages build**; Bun is not required for the static frontend build. Bun remains in the independent legacy backend until replaced with a verified alternative.
+- GitHub Pages deployment at [run 44192659876](https://github.com/Knapp-Kevin/HexaWars-Arena/actions/runs/44192659876) failed HTTP 404 **after the artifact passed build verification**. The repository owner must enable Pages with GitHub Actions as its publishing source before the public site can be claimed live.
+
+**Updated priority:** get the GitHub Pages UI publicly accessible; measure the pinned Verdant renderer in actual browsers; move toward Verdant Rust/Wasm simulation with golden-trace parity; only then build human-versus-AI gameplay and replace backend responsibilities. Track target architecture and Bun retirement in [issue #8](https://github.com/Knapp-Kevin/HexaWars-Arena/issues/8).
+
+**Acceptance of this document records the discovery and its evidence; it is not a production approval or a claim that the site is live.**
