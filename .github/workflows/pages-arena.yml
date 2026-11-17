@@ -48,6 +48,8 @@ jobs:
         run: node scripts/build-pages.mjs
       - name: Verify imports, replay data, Verdant and zero private files
         run: node scripts/verify-pages.mjs
+      - name: Test symmetric map and deterministic detailed meshes
+        run: node --test qa/scene-geometry.test.mjs
       - name: Parse-check browser output
         run: |
           for f in dist/pages/*.js dist/pages/*.mjs; do node --check "$f"; done
