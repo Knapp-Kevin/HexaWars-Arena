@@ -19,6 +19,7 @@ function makeTempDb() {
       completed_at    INTEGER
     );
   `);
+  db.exec("CREATE TABLE agent_versions (id INTEGER PRIMARY KEY, operator_id INTEGER NOT NULL); INSERT INTO agent_versions VALUES (10,10),(20,20)");
   return db;
 }
 
@@ -26,6 +27,7 @@ function fakeChannel(id: number): AgentChannel {
   return {
     send: async () => {},
     dispose: () => {},
+    receivePlan: async () => ({ bid: 0, extras: [] }),
     operatorId: id,
     closed: false,
     close() { (this as any).closed = true; },
@@ -47,9 +49,10 @@ describe("MatchRunner completion", () => {
     const runner = new MatchRunner(db);
     const ctx: RunnerContext = {
       matchId: "completion-winner-1",
+      seed: "fixture-seed-completion-winner-1",
       ladderId: "ladder-1",
-      a: { id: 10, name: "OpA" },
-      b: { id: 20, name: "OpB" },
+      a: { id: 10, agentVersionId: 10, name: "OpA" },
+      b: { id: 20, agentVersionId: 20, name: "OpB" },
     };
     const channels = { a: fakeChannel(10), b: fakeChannel(20) };
 
@@ -71,9 +74,10 @@ describe("MatchRunner completion", () => {
     const runner = new MatchRunner(db);
     const ctx: RunnerContext = {
       matchId: "completion-origin-1",
+      seed: "fixture-seed-completion-origin-1",
       ladderId: "ladder-1",
-      a: { id: 10, name: "OpA" },
-      b: { id: 20, name: "OpB" },
+      a: { id: 10, agentVersionId: 10, name: "OpA" },
+      b: { id: 20, agentVersionId: 20, name: "OpB" },
     };
     const channels = { a: fakeChannel(10), b: fakeChannel(20) };
 
@@ -88,9 +92,10 @@ describe("MatchRunner completion", () => {
     const runner = new MatchRunner(db);
     const ctx: RunnerContext = {
       matchId: "completion-timestamp-1",
+      seed: "fixture-seed-completion-timestamp-1",
       ladderId: "ladder-1",
-      a: { id: 10, name: "OpA" },
-      b: { id: 20, name: "OpB" },
+      a: { id: 10, agentVersionId: 10, name: "OpA" },
+      b: { id: 20, agentVersionId: 20, name: "OpB" },
     };
     const channels = { a: fakeChannel(10), b: fakeChannel(20) };
 
@@ -106,9 +111,10 @@ describe("MatchRunner completion", () => {
     const runner = new MatchRunner(db);
     const ctx: RunnerContext = {
       matchId: "completion-forfeit-1",
+      seed: "fixture-seed-completion-forfeit-1",
       ladderId: "ladder-1",
-      a: { id: 10, name: "OpA" },
-      b: { id: 20, name: "OpB" },
+      a: { id: 10, agentVersionId: 10, name: "OpA" },
+      b: { id: 20, agentVersionId: 20, name: "OpB" },
     };
 
     // Channel A never responds (times out → timeout forfeit), B closes mid-match
