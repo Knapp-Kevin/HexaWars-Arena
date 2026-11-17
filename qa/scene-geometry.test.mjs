@@ -39,7 +39,7 @@ test("all 12 frames produce deterministic, finite and detailed Verdant meshes",(
     assert(m.idx instanceof Uint32Array);
     assert.equal(m.pos.length,m.norm.length);
     assert.equal(m.pos.length,m.col.length);
-    assert.equal(m.pos.length,m.idx.length);
+    assert.equal(m.pos.length/3,m.idx.length, "One uint index per three-component vertex");
     assert.equal(m.pos.length%9,0);
     assert(m.pos.length>16000,"Missing detailed geometry");
     assert(m.pos.length<1500000,"Unbounded geometry budget");
