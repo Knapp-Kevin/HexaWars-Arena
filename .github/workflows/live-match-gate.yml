@@ -47,5 +47,32 @@ jobs:
             tests/integration/live-ws-server.test.ts
       - name: Full repository regression suite
         run: bun test
-      - name: TypeScript strict no-emit check
-        run: bunx tsc --noEmit
+      - name: Record candidate TypeScript diagnostics
+        run: |
+          set +e
+          bunx tsc --noEmit --pretty false > "$RUNNER_TEMP/head-types.txt" 2>&1
+          result=$?
+          if [ "$result" -ne 0 ] && ! grep -Eq 'error TS[0-9]+' "$RUNNER_TEMP/head-types.txt"; then
+            cat "$RUNNER_TEMP/head-types.txt"
+            exit 1
+          fi
+          exit 0
+      - name: Checkout exact PR base for TypeScript comparison
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.base.sha || 'main' }}
+          path: .typecheck-base
+          persist-credentials: false
+      - name: Record baseline TypeScript diagnostics
+        run: |
+          (cd .typecheck-base && bun install --frozen-lockfile)
+          set +e
+          (cd .typecheck-base && bunx tsc --noEmit --pretty false) > "$RUNNER_TEMP/base-types.txt" 2>&1
+          result=$?
+          if [ "$result" -ne 0 ] && ! grep -Eq 'error TS[0-9]+' "$RUNNER_TEMP/base-types.txt"; then
+            cat "$RUNNER_TEMP/base-types.txt"
+            exit 1
+          fi
+          exit 0
+      - name: Fail if TypeScript errors increase
+        run: node scripts/type-error-ratchet.mjs "$RUNNER_TEMP/base-types.txt" "$RUNNER_TEMP/head-types.txt"
