@@ -64,6 +64,50 @@
     .terrain-badge strong{color:#ebd49e}
     .camera-help{color:#b7ccdf}
     @media(max-width:650px){.camera-tools{right:8px;bottom:8px;gap:3px;padding:5px}.camera-tools button{min-width:35px;height:35px}.camera-tools #camera-reset{min-width:46px}.camera-tools output{min-width:44px}.terrain-badge{left:8px;bottom:8px;max-width:42%;font-size:10px;padding:7px}.viewport{min-height:450px}}
+
+    .mobile-playback{display:none}
+    .field-guide{padding:0;overflow:hidden}
+    .field-guide summary{cursor:pointer;list-style:none;position:relative;padding:19px 22px;font-size:14px;font-weight:700;min-height:54px}
+    .field-guide summary::-webkit-details-marker{display:none}
+    .field-guide summary:after{content:"+";position:absolute;right:22px;font-size:22px;line-height:20px;color:#eac38a}
+    .field-guide[open] summary:after{content:"−"}
+    .guide-inner{border-top:1px solid #30465d;padding:14px 22px}
+    .guide-inner p{font-size:12px;line-height:1.55}
+    @media(max-width:850px){
+      .wrap{padding:0 8px}
+      header{padding:11px 4px;min-height:48px}
+      .brand{font-size:12px;letter-spacing:.08em}
+      .brand span{font-size:18px;margin-right:4px}
+      nav{font-size:12px;gap:10px}
+      nav a:last-child{display:none}
+      .intro{margin:10px 2px 9px;gap:0}
+      .intro h1{font:700 clamp(22px,6vw,28px)/1.1 system-ui,sans-serif;letter-spacing:-.02em;margin:0}
+      .intro p:not(.eyebrow),.intro .eyebrow,.pill{display:none}
+      .layout{gap:10px}
+      .stage{padding:4px;border-radius:10px}
+      .viewport{min-height:calc(100dvh - 152px);max-height:740px;border-radius:8px}
+      .hud{left:8px;top:9px;padding:8px 9px;max-width:66%;font-size:10px;border-radius:8px}
+      .hud strong{font-size:12px;line-height:1.32}
+      .camera-tools{top:9px;right:8px;bottom:auto;padding:4px;gap:2px;flex-wrap:wrap;max-width:46%;justify-content:flex-end}
+      .camera-tools button{font-size:16px;min-width:32px;height:33px;padding:5px}
+      .camera-tools #camera-reset{font-size:11px;min-width:42px}
+      .camera-tools output{min-width:39px;font-size:10px}
+      .terrain-badge{bottom:74px;left:9px;max-width:70%;padding:6px 9px;font-size:11px}
+      .stage-footer{display:none}
+      .mobile-playback{display:flex;position:absolute;bottom:10px;left:9px;right:9px;height:52px;align-items:center;justify-content:space-evenly;gap:6px;background:#071827eb;border:1px solid #55718b;border-radius:12px;padding:5px 9px;box-shadow:0 7px 22px #0009}
+      .mobile-playback button{min-width:45px;height:40px;padding:3px 9px;font-size:24px;line-height:1;font-weight:750;border-radius:8px}
+      .mobile-playback #mobile-play{background:#76aff3;color:#091b2b}
+      .mobile-playback output{font-size:13px;font-weight:750;font-variant-numeric:tabular-nums;min-width:45px;text-align:center}
+      aside{display:flex;flex-direction:column;gap:8px}
+      aside .panel{padding:15px;border-radius:10px}
+      aside .field-guide{padding:0}
+      aside .field-guide summary{padding:15px 18px}
+      aside .diagnostic{display:none}
+      aside .panel h2{font-size:14px}
+      aside .panel .eyebrow{margin-bottom:4px}
+      aside .panel .slider{margin:4px 0}
+      footer{display:none}
+    }
   </style>
   <script type="module" src="./verdant.js"></script>
 </head>
@@ -75,11 +119,11 @@
     </header>
     <section class="intro">
       <div>
-        <p class="eyebrow">Verdant Engine / Interactive 3D battlefield</p>
-        <h1>Every hex tells a story.</h1>
-        <p>Explore a balanced tactical hex arena with layered terrain, distinct unit silhouettes and direct camera controls. Orbit and zoom in for detail, or pull out for the entire battle. This is a scripted replay, not a live match.</p>
+        <p class="eyebrow">TACTICAL ARENA · 3D REPLAY</p>
+        <h1>The battlefield is alive.</h1>
+        <p>Watch the battle unfold in 3D. Explore the terrain, follow your squads, and replay each round.</p>
       </div>
-      <span class="pill">Interactive 3D preview</span>
+      <span class="pill">REPLAY · ALPHA</span>
     </section>
     <main class="layout">
       <section class="stage" aria-labelledby="view-heading">
@@ -93,6 +137,12 @@
             <button id="camera-zoom-in" type="button" aria-label="Zoom in" title="Zoom in">+</button>
             <button id="camera-reset" type="button" title="Reset camera">Reset</button>
           </div>
+          <div class="mobile-playback" role="group" aria-label="Replay controls">
+            <button id="mobile-prev" type="button" aria-label="Previous round">‹</button>
+            <output id="compact-round" aria-label="Current round">1 / 12</output>
+            <button id="mobile-play" type="button" aria-label="Play replay">▶</button>
+            <button id="mobile-next" type="button" aria-label="Next round">›</button>
+          </div>
           <div id="fallback" class="overlay" hidden role="status">
             <section><h2>3D rendering unavailable</h2><p id="fallback-text">Your browser may not support WebGL2.</p><p><a href="./">Open the classic SVG replay instead</a></p></section>
           </div>
@@ -101,7 +151,7 @@
       </section>
       <aside>
         <section class="panel">
-          <p class="eyebrow">Match transport</p><h2>Replay controls</h2>
+          <p class="eyebrow">MATCH REPLAY</p><h2>Battle controls</h2>
           <div class="row"><span>Round</span><strong id="round">1 / 12</strong></div>
           <input id="round-slider" class="slider" type="range" min="1" max="12" value="1" step="1" aria-label="Replay round">
           <div class="controls">
@@ -111,19 +161,22 @@
           </div>
           <div class="row"><span>Blue units</span><strong id="blue-count">—</strong></div>
           <div class="row"><span>Red units</span><strong id="red-count">—</strong></div>
-          <div class="row"><span>Active backend</span><strong id="backend-kind">Unknown</strong></div>
+          <div class="row diagnostic"><span>Renderer</span><strong id="backend-kind">Unknown</strong></div>
         </section>
-        <section class="panel">
-          <p class="eyebrow">Tactical cartography</p><h2>Hex terrain</h2>
-          <div class="legend">
-            <span><i class="chip" style="background:#4a8263"></i>Plain</span>
-            <span><i class="chip" style="background:#23543f"></i>Forest</span>
-            <span><i class="chip" style="background:#8c98a3"></i>Mountain</span>
-            <span><i class="chip" style="background:#1b4a73"></i>Water</span>
+        <details class="panel field-guide">
+          <summary>Field guide</summary>
+          <div class="guide-inner">
+            <div class="legend" aria-label="Terrain types">
+              <span><i class="chip" style="background:#4a8263"></i>Plains</span>
+              <span><i class="chip" style="background:#23543f"></i>Forest</span>
+              <span><i class="chip" style="background:#8c98a3"></i>Mountain</span>
+              <span><i class="chip" style="background:#1b4a73"></i>Water</span>
+            </div>
+            <p>Drag to orbit. Shift-drag to pan. Pinch or scroll to zoom. Use +, −, 0, and arrows while the battlefield is focused.</p>
+            <p>This is a scripted demonstration with illustrative movement between public replay snapshots, not a live match or exact combat path.</p>
+            <p>Powered by a pinned Verdant WebGL2 renderer. The authoritative HexaWars simulation, ranking, and textured skin pipeline are separate development milestones.</p>
           </div>
-          <p class="small">Layered hex borders, varied elevations, forest trees, mountain peaks and role-specific squad silhouettes improve terrain and unit readability.</p><p class="small">The demo map is a symmetric 61-hex disk; authoritative rules are unchanged.</p>
-          <p class="small">Verdant renders this public scripted replay. Ranked play and authoritative simulation are not run here.</p>
-        </section>
+        </details>
       </aside>
     </main>
     <footer><span>Verdant renderer · pinned upstream source with MIT / Apache-2.0 notices</span><span>GitHub Pages-ready: all visuals run inside the browser. Ranked play requires a separate server.</span></footer>
