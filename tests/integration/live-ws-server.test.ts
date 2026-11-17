@@ -1,0 +1,128 @@
+import { test, expect } from "bun:test";
+import { createServer } from "node:net";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+type Bot = { socket: WebSocket; ready: Promise<void>; end: Promise<Record<string, unknown>>; frames: Record<string, unknown>[] };
+
+async function availablePort(): Promise<number> {
+  const server = createServer();
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("no port");
+  const port = address.port;
+  await new Promise<void>((resolve, reject) => server.close(err => err ? reject(err) : resolve()));
+  return port;
+}
+
+async function health(base: string): Promise<void> {
+  for (let i = 0; i < 50; i++) {
+    try {
+      const res = await fetch(`${base}/health`);
+      if (res.ok) return;
+    } catch { /* server starting */ }
+    await Bun.sleep(100);
+  }
+  throw new Error("Bun arena server did not become healthy");
+}
+
+function openBot(url: string, token: string): Bot {
+  const socket = new WebSocket(url, { headers: { Authorization: `Bearer ${token}` } });
+  const frames: Record<string, unknown>[] = [];
+  const ready = new Promise<void>((resolve, reject) => {
+    socket.addEventListener("open", () => resolve(), { once: true });
+    socket.addEventListener("error", () => reject(new Error("agent WS upgrade failed")), { once: true });
+  });
+  const end = new Promise<Record<string, unknown>>((resolve, reject) => {
+    socket.addEventListener("message", (event) => {
+      const frame = JSON.parse(String(event.data)) as Record<string, unknown>;
+      frames.push(frame);
+      if (frame.type === "STATE") {
+        socket.send(JSON.stringify({
+          type: "PLAN", matchId: frame.matchId, turn: frame.turn,
+          plan: { bid: 0, extras: [] },
+        }));
+      }
+      if (frame.type === "END") resolve(frame);
+      if (frame.type === "ERROR" && frame.code === "match_runtime_failed") reject(new Error("match runtime failed"));
+    });
+    socket.addEventListener("close", () => reject(new Error("WS closed before match completed")), { once: true });
+  });
+  return { socket, ready, end, frames };
+}
+
+test("two real authenticated WebSockets finish a match and fetch persisted replay", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "hexawars-live-"));
+  const port = await availablePort();
+  const dbPath = join(dir, "arena.db");
+  const server = Bun.spawn(["bun", "run", "src/server.ts"], {
+    cwd: process.cwd(),
+    env: { ...process.env, PORT: String(port), ARENA_DB_PATH: dbPath, ARENA_DB: dbPath, ARENA_SEED_DEMO: "0" },
+    stdout: "pipe", stderr: "pipe",
+  });
+  const bots: Bot[] = [];
+  const base = `http://127.0.0.1:${port}`;
+  try {
+    await health(base);
+
+    async function register(handle: string) {
+      const res = await fetch(`${base}/api/arena/operators`, {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ handle }),
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json() as { token: string; operator: { id: number } };
+      const agentRes = await fetch(`${base}/api/arena/agent-versions`, {
+        method: "POST",
+        headers: { "content-type": "application/json", Authorization: `Bearer ${body.token}` },
+        body: JSON.stringify({ code: "export const plan = () => ({bid:0,extras:[]})", config: "{}", modelId: `smoke-${handle}`, promptTemplate: "pass" }),
+      });
+      expect(agentRes.status).toBe(200);
+      return body.token;
+    }
+    const tokenA = await register("live_alpha");
+    const tokenB = await register("live_bravo");
+    const wsUrl = `ws://127.0.0.1:${port}/api/arena/agents/ws`;
+    bots.push(openBot(wsUrl, tokenA), openBot(wsUrl, tokenB));
+    await Promise.all(bots.map(b => b.ready));
+
+    async function enqueue(token: string) {
+      const res = await fetch(`${base}/api/arena/matchmaker/enqueue`, {
+        method: "POST", headers: { Authorization: `Bearer ${token}` },
+      });
+      expect(res.status).toBe(200);
+    }
+    await enqueue(tokenA);
+    await enqueue(tokenB);
+    const [endA, endB] = await Promise.race([
+      Promise.all(bots.map(bot => bot.end)),
+      Bun.sleep(15000).then(() => { throw new Error("match did not complete within 15s"); }),
+    ]);
+
+    expect(endA.type).toBe("END");
+    expect(endA.matchId).toBe(endB.matchId);
+    for (const bot of bots) {
+      expect(bot.frames.some(f => f.type === "HELLO")).toBe(true);
+      expect(bot.frames.some(f => f.type === "STATE")).toBe(true);
+      expect(JSON.stringify(bot.frames.filter(f => f.type !== "END"))).not.toContain("match_seed_revealed");
+    }
+    const id = String(endA.matchId);
+    const matchRes = await fetch(`${base}/api/arena/matches/${id}`);
+    expect(matchRes.status).toBe(200);
+    const match = await matchRes.json() as { outcome: string | null; agentAId: number; agentBId: number };
+    expect(match.outcome).not.toBeNull();
+    expect(match.agentAId).toBeGreaterThan(0);
+    expect(match.agentBId).toBeGreaterThan(0);
+    const replay = await fetch(`${base}/api/arena/matches/${id}/events`);
+    expect(replay.status).toBe(200);
+    const data = await replay.json() as { events: Array<{ eventType: string; payload: string }> };
+    expect(data.events.length).toBeGreaterThan(0);
+    expect(data.events.at(-1)?.eventType).toBe("match_seed_revealed");
+  } finally {
+    for (const bot of bots) bot.socket.close();
+    server.kill();
+    await server.exited;
+    rmSync(dir, { recursive: true, force: true });
+  }
+}, 30000);
