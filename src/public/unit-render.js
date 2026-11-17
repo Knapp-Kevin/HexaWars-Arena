@@ -1,4 +1,4 @@
-import { cubeToPixel } from "./coords.js?v=20260422b1";
+import { cubeToPixel } from "./coords.js";
 
 const HEX_SIZE = 48;
 const TOKEN_SIZE = 44;
