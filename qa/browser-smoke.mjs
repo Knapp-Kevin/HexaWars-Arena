@@ -294,6 +294,15 @@ async function verifyPlayablePractice(mobile=false){
   const squadButtons=page.locator("#squad-roster button");
   assert.equal(await squadButtons.count(),5,
     "Frontier must offer one readable quick-select per friendly squad");
+  const actualRoles=(await squadButtons.allTextContents())
+    .map(label=>label.trim().split(/\\s+/)[0].toLowerCase()).sort();
+  assert.deepEqual(actualRoles,["captain","interceptor","raider","scout","siege"],
+    "Every human match must deploy all five distinct canonical tactical classes");
+  const silhouettes=await page.locator("#battle-map .cell .unit").evaluateAll(nodes=>
+    [...new Set(nodes.map(n=>n.tagName.toLowerCase()))]);
+  assert(silhouettes.includes("polygon")&&silhouettes.includes("path")&&
+    silhouettes.includes("circle"),
+    "Role identification must not depend on team color or a text label alone");
   await squadButtons.first().click();
   await page.waitForFunction(()=>document.querySelector('#squad-roster button[aria-pressed="true"]'),
     undefined,{timeout:15000});

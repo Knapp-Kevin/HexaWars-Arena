@@ -10,10 +10,18 @@ export const MOVE_POINTS: Record<UnitType, number> = {
   infantry: 2,
   scout: 3,
   heavy: 1,
+  raider: 2,
+  interceptor: 1,
+  siege: 1,
+  captain: 1,
 };
 
 export const RANGE: Record<UnitType, number> = {
   infantry: 1,
   scout: 1,
   heavy: 2,
+  raider: 1,
+  interceptor: 1,
+  siege: 2,
+  captain: 1,
 };

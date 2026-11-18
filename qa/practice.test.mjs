@@ -1106,3 +1106,102 @@ test("Frontier v3 sight 16-seed live 5v5 cohort exercises both moves and legal b
   assert(stats.attacks>0&&stats.moves>0);
   console.log("FRONTIER_V3_SIGHT_COHORT",JSON.stringify(stats));
 });
+
+test("single Frontier game supports exactly five distinct, symmetric tactical classes with one rules identity",()=>{
+  const expected=["captain","interceptor","raider","scout","siege"];
+  const roles=new Set(expected);
+  for(let i=0;i<32;i++){
+    const seed="role-qualification-"+String(i).padStart(3,"0");
+    const roleGame=newPractice(seed,"frontier127","bid-aware-v1","frontier-five-roles-v1");
+    const oldV3=newPractice(seed,"frontier127","bid-aware-v1","maneuver-v3-vision");
+    assert.equal(roleGame.topology,"frontier127");
+    assert.equal(roleGame.rulesVersion,"hexawars-frontier127-five-roles-v1");
+    assert.notEqual(roleGame.matchId,oldV3.matchId);
+    assert.equal(roleGame.state.visible.length,127);
+    assert.equal(roleGame.state.units.length,10);
+    assert.deepEqual(roleGame.state.visible.map(c=>[c.position,c.terrain]),
+      oldV3.state.visible.map(c=>[c.position,c.terrain]),
+      "Five-role development must not invent another map style");
+    for(const side of ["A","B"]){
+      const members=roleGame.state.units.filter(u=>u.owner===side);
+      assert.deepEqual(members.map(u=>u.type).sort(),expected);
+      assert(members.every(u=>roles.has(u.type)));
+      assert(members.every(u=>u.hp>0&&u.strength>0));
+      const view=practiceView(roleGame,side);
+      assert.equal(view.maxMoves,2);
+      assert.equal(view.units.filter(u=>u.side===side).length,5);
+      assert(view.units.filter(u=>u.side===side).every(u=>u.special?.length>15),
+        "Five role specials must be explained in the human command HUD");
+      const orders=chooseBotRoundOrders(roleGame,side);
+      assert(validatePracticeOrders(roleGame,side,orders).valid);
+      if(orders.move2)assert.notEqual(orders.move?.unitId,orders.move2.unitId);
+    }
+    for(const role of expected){
+      const a=roleGame.state.units.find(u=>u.owner==="A"&&u.type===role);
+      const b=roleGame.state.units.find(u=>u.owner==="B"&&u.type===role);
+      assert(a&&b);
+      assert.equal(a.hp,b.hp);
+      assert.equal(a.strength,b.strength);
+      assert.equal(a.weight,b.weight);
+      assert.equal(a.position.q,-b.position.q);
+      assert.equal(a.position.r,-b.position.r);
+    }
+  }
+});
+
+test("five-role Siege cannot move and attack in the same sealed round",()=>{
+  const game=newPractice("role-siege-fair","frontier127","bid-aware-v1","frontier-five-roles-v1");
+  const at=(q,r)=>({q,r,s:-q-r});
+  const siege={id:"A-siege",owner:"A",type:"siege",weight:3,hp:6,strength:6,
+    position:at(-2,0)};
+  const spotter={id:"A-scout",owner:"A",type:"scout",weight:1,hp:5,strength:5,
+    position:at(-1,1)};
+  const target={id:"B-captain",owner:"B",type:"captain",weight:3,hp:7,strength:7,
+    position:at(0,0)};
+  game.state.units=[siege,spotter,target];
+  game.state.visible=game.state.visible.map(c=>({...c,terrain:"plain",
+    unit:game.state.units.find(u=>u.position.q===c.position.q&&u.position.r===c.position.r)}));
+  const move={kind:"move",unitId:siege.id,to:at(-1,0)};
+  const attack={kind:"attack",unitId:siege.id,to:target.position};
+  assert(legalCommands(game,"A",siege.id).some(c=>c.kind==="attack"));
+  assert(!legalCommands(game,"A",siege.id,move).some(c=>c.kind==="attack"),
+    "After moving, Siege must not offer an attack highlight");
+  assert.throws(()=>validatePracticeOrders(game,"A",{move,attack,bid:1}),
+    /not legal|frontier_siege_cannot/);
+  assert(validatePracticeOrders(game,"A",{attack,bid:1}).valid);
+  assert(validatePracticeOrders(game,"A",{move,bid:1}).valid);
+});
+
+test("single Frontier 5-role selfplay closes full matches with actual special effects and two moves",()=>{
+  const t={matches:12,A:0,B:0,draw:0,caps:0,rounds:0,bidsA:0,bidsB:0,
+    secondA:0,secondB:0,attacks:0,roleEffects:0,moves:0};
+  for(let i=0;i<t.matches;i++){
+    const game=newPractice("five-role-selfplay-"+String(i).padStart(3,"0"),
+      "frontier127","bid-aware-v1","frontier-five-roles-v1");
+    while(!game.finished&&game.round<game.state.roundCap){
+      const a=chooseBotRoundOrders(game,"A"),b=chooseBotRoundOrders(game,"B");
+      assert(validatePracticeOrders(game,"A",a).valid);
+      assert(validatePracticeOrders(game,"B",b).valid);
+      if(a.move2)t.secondA++;
+      if(b.move2)t.secondB++;
+      t.bidsA+=a.bid;t.bidsB+=b.bid;
+      const step=advancePractice(game,a);
+      t.attacks+=step.events.filter(e=>e==="unit_attacked").length;
+      t.roleEffects+=step.events.filter(e=>e==="ability_resolved").length;
+      t.moves+=step.events.filter(e=>e==="unit_moved").length;
+      assert(step.events.filter(e=>e==="unit_moved").length<=4);
+      assert(step.events.filter(e=>e==="unit_attacked").length<=2);
+      assert(game.state.units.every(u=>u.hp>0));
+    }
+    assert(game.finished);
+    t[game.finished.winner]++;
+    t.rounds+=game.round;
+    if(game.round===game.state.roundCap)t.caps++;
+  }
+  assert(t.secondA>0&&t.secondB>0);
+  assert(t.attacks>0&&t.moves>0);
+  assert(t.roleEffects>0,"No original tactical special ever occurred");
+  console.log("FIVE_ROLE_FRONTIER_COHORT",JSON.stringify({
+    ...t,meanRounds:Number((t.rounds/t.matches).toFixed(2)),
+  }));
+});

@@ -4,13 +4,14 @@ import { cellAt, FRONTIER_STARTS_A } from "./board.ts";
 /**
  * Unit type definitions with their base stats.
  */
-export type UnitType = "infantry" | "scout" | "heavy";
+export type UnitType = "infantry" | "scout" | "heavy" | "raider" | "interceptor" | "siege" | "captain";
 
 /** Default HP per unit type */
 const DEFAULT_HP: Record<UnitType, number> = {
   infantry: 5,
   scout: 3,
   heavy: 8,
+  raider: 5,interceptor: 6,siege: 6,captain: 7,
 };
 
 /** Default strength per unit type */
@@ -18,6 +19,7 @@ const DEFAULT_STRENGTH: Record<UnitType, number> = {
   infantry: 3,
   scout: 2,
   heavy: 5,
+  raider: 5,interceptor: 6,siege: 6,captain: 7,
 };
 
 /** Default weight per unit type: drives bid economy and aim-penalty. */
@@ -25,6 +27,7 @@ export const DEFAULT_WEIGHT: Record<UnitType, UnitWeight> = {
   scout: 1,
   infantry: 2,
   heavy: 3,
+  raider: 1,interceptor: 2,siege: 3,captain: 3,
 };
 
 /**
@@ -151,6 +154,37 @@ export function placeFrontierUnits(board: HexCell[][]): HexCell[][] {
       cell.unit = {
         ...createUnit(owner, position, start.type),
         id: `frontier-${owner}-${index+1}-${start.type}`,
+      };
+    }
+  }
+  return board;
+}
+
+/**
+ * The SINGLE new game: one Scout, Raider, Interceptor, Siege and Captain
+ * for each commander, at 180° rotationally mirrored Frontier starting hexes.
+ * Archived frontier-v1/v2/v3 and the 3-unit legacy deployments are unchanged.
+ *
+ * Mirrored ordering makes army composition equal. Tactical differences come
+ * from abilities, not a randomized unit-count or starting-role advantage.
+ */
+export const FRONTIER_ROLES = [
+  "scout","raider","interceptor","siege","captain",
+] as const;
+
+export function placeFrontierRoleUnits(board:HexCell[][]):HexCell[][] {
+  for(let index=0;index<FRONTIER_STARTS_A.length;index++){
+    const pos=FRONTIER_STARTS_A[index];
+    const a:CubeCoord={q:pos.q,r:pos.r,s:pos.s};
+    const b:CubeCoord={q:-pos.q,r:-pos.r,s:-pos.s};
+    const role=FRONTIER_ROLES[index];
+    for(const [owner,position] of [["A",a],["B",b]] as const){
+      const cell=cellAt(board,position);
+      if(!cell||cell.unit||cell.terrain==="water"||cell.terrain==="mountain")
+        throw new Error("Frontier five-role spawn is blocked or occupied");
+      cell.unit={
+        ...createUnit(owner,position,role),
+        id:`frontier-${owner}-${index+1}-${role}`,
       };
     }
   }

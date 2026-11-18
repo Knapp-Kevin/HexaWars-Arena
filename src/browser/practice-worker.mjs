@@ -7,7 +7,7 @@ self.onmessage=(message)=>{
     if(type==="START"){
       // Browser practice exposes ONE battle model. Callers cannot select
       // archived rule IDs or a smaller arena through worker messages.
-      session=newPractice(seed,"frontier127","bid-aware-v1","maneuver-v3-vision");
+      session=newPractice(seed,"frontier127","bid-aware-v1","frontier-five-roles-v1");
       self.postMessage({id,ok:true,state:practiceView(session)});
       return;
     }
