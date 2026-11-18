@@ -252,6 +252,13 @@
       .squad-roster{gap:5px;padding:5px}
       .squad-roster button{min-height:46px;min-width:96px;padding:5px 8px;font-size:11px}
     }
+    /* Three command slots enlarge the fixed phone dock. Keep 3D camera
+       controls BELOW the squad tray and ABOVE that dock, never behind it. */
+    @media(max-width:860px){
+      body.is-3d .game3d-tools{
+        top:124px;bottom:auto;right:7px
+      }
+    }
     /* The fixed phone command tray must not cover 2D zoom/fit controls. */
     @media(max-width:860px){
       body:not(.is-3d) .game3d-tools{
