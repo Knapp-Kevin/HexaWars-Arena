@@ -324,11 +324,21 @@ async function verifyInteractiveVerdantPractice(mobile=false){
   await page.locator("#game-3d-reset").click();
   assert(Math.abs(Number(await c.getAttribute("data-camera-distance"))-home)<.06,
     "3D gameplay camera reset failed");
-  await page.locator(".three-d-target.select:visible").first().click();
+  const select=mobile
+    ?page.locator(".three-d-tray-choice.select:visible")
+    :page.locator(".three-d-target.select:visible");
+  assert(await select.count()>0,"No reachable 3D squad selection controls");
+  if(mobile){
+    const hitHeight=await select.first().evaluate(el=>el.getBoundingClientRect().height);
+    assert(hitHeight>=44,"Phone squad selection hit target is too small");
+  }
+  await select.first().click();
   await page.waitForFunction(()=>
     document.querySelectorAll(".three-d-target.move,.three-d-target.attack").length>0,
     undefined,{timeout:15000});
-  const legal=page.locator(".three-d-target.move:visible,.three-d-target.attack:visible");
+  const legal=mobile
+    ?page.locator(".three-d-tray-choice.move:visible,.three-d-tray-choice.attack:visible")
+    :page.locator(".three-d-target.move:visible,.three-d-target.attack:visible");
   assert(await legal.count()>0,"No visible legal 3D orders");
   await legal.first().click();
   assert(await page.locator("#commit-round").isEnabled(),
