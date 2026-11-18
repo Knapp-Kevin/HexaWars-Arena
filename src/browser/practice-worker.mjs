@@ -12,7 +12,7 @@ self.onmessage=(message)=>{
     if(!session)throw new Error("Start a battle first");
     if(type==="SELECT"){
       self.postMessage({id,ok:true,
-        legal:legalCommands(session,"A",unitId),
+        legal:legalCommands(session,"A",unitId,orders?.move??null),
         state:practiceView(session)});
       return;
     }
