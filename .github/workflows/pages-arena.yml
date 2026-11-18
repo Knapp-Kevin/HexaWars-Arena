@@ -15,6 +15,7 @@ on:
       - "src/shared/public-match.ts"
       - "scripts/build-pages.mjs"
       - "scripts/verify-pages.mjs"
+      - "tests/engine/**"
       - "qa/**"
       - ".github/workflows/pages-arena.yml"
   push:
@@ -32,6 +33,7 @@ on:
       - "src/shared/public-match.ts"
       - "scripts/build-pages.mjs"
       - "scripts/verify-pages.mjs"
+      - "tests/engine/**"
       - "qa/**"
       - ".github/workflows/pages-arena.yml"
   workflow_dispatch:
