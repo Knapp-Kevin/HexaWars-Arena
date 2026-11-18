@@ -117,6 +117,35 @@ describe("single Frontier five-site strategic control",()=>{
     expect(flipped.score).toEqual({a:2,b:1});
     expect(flipped.frontierObjectiveHold?.a).toBe(0);
   });
+  it("four living surrounding squads can claim a vacant site, direct opposing occupancy takes precedence",()=>{
+    const base=createFrontierObjectiveMatch("objective-surround");
+    const ring:CubeCoord[]=[
+      {q:-1,r:0,s:1},{q:1,r:0,s:-1},
+      {q:0,r:-1,s:1},{q:0,r:1,s:-1},
+    ];
+    const originalA=base.units.filter(u=>u.owner==="A");
+    const positioned={...base,units:base.units.map(u=>{
+      const index=originalA.findIndex(a=>a.id===u.id);
+      return index>=0&&index<4?{...u,position:ring[index]}:u;
+    })};
+    const claimed=updateFrontierObjectives(positioned);
+    const center=c=>c.position.q===0&&c.position.r===0;
+    expect(claimed.state.visible.find(center)?.controlledBy).toBe("A");
+    expect(claimed.events.some(e=>e.type==="territory_claimed"&&
+      (e.payload.position as CubeCoord).q===0&&e.payload.owner==="A")).toBe(true);
+    const defender=positioned.units.find(u=>u.owner==="B")!;
+    const occupied={...claimed.state,units:claimed.state.units.map(u=>
+      u.id===defender.id?{...u,position:{q:0,r:0,s:0}}:u)};
+    const flipped=updateFrontierObjectives(occupied);
+    expect(flipped.state.visible.find(center)?.controlledBy).toBe("B");
+    expect(flipped.events.some(e=>e.type==="territory_claimed"&&
+      e.payload.owner==="B"&&e.payload.previousOwner==="A")).toBe(true);
+    const invalid={...positioned,units:positioned.units.map(u=>
+      u.owner==="A"?{...u,hp:0}:u)};
+    expect(updateFrontierObjectives(invalid).state.visible.find(center)?.controlledBy)
+      .toBeUndefined();
+  });
+
   it("dead units do not capture and forged embedded cell.unit does not control",()=>{
     const state=placeOnObjectives("dead-control");
     const killed={...state,units:state.units.map(u=>u.owner==="A"?{...u,hp:0}:u)};
