@@ -1,11 +1,13 @@
 import {newPractice,practiceView,legalCommands,advancePractice,validatePracticeOrders} from "./practice-core.mjs";
 let session=null;
 self.onmessage=(message)=>{
-  const {id,type,seed,topology,opponentPolicy,economy,unitId,action,orders}=message.data??{};
+  const {id,type,seed,unitId,action,orders}=message.data??{};
   if(!Number.isSafeInteger(id))return;
   try{
     if(type==="START"){
-      session=newPractice(seed,topology??"frontier127",opponentPolicy??"legacy-v1",economy??"classic-v1");
+      // Browser practice exposes ONE battle model. Callers cannot select
+      // archived rule IDs or a smaller arena through worker messages.
+      session=newPractice(seed,"frontier127","bid-aware-v1","maneuver-v3-vision");
       self.postMessage({id,ok:true,state:practiceView(session)});
       return;
     }
