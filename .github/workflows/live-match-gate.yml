@@ -53,8 +53,8 @@ jobs:
             tests/matchmaker/loop.test.ts \
             src/gateway/spectator-ws.test.ts \
             tests/integration/live-ws-server.test.ts
-      - name: Full repository regression suite
-        run: bun test
+      - name: Full Bun source and server regression suite (browser artifact tests are in Pages gate)
+        run: bun test tests src
       - name: Record candidate TypeScript diagnostics
         run: |
           set +e
