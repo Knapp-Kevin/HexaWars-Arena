@@ -337,8 +337,11 @@ async function verifyPlayablePractice(mobile=false){
     assert.notEqual((await page.locator("#planned-move2").innerText()).trim(),"Not set",
       "Second squad must be visibly queued in a separate order slot");
     await page.locator("#clear-move2").click();
-    await page.waitForFunction(()=>document.querySelector("#clear-move2")?.disabled===true,
-      undefined,{timeout:15000});
+    await page.waitForFunction(()=>(
+      document.querySelector("#planned-move2")?.textContent?.trim()==="Not set" &&
+      document.querySelector("#clear-move2")?.disabled===true &&
+      document.querySelector("#commit-round")?.disabled===false
+    ),undefined,{timeout:15000});
     assert(await page.locator("#commit-round").isEnabled(),
       "Clearing move 2 must retain the first legal squad move");
   }
