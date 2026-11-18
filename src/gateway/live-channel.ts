@@ -64,6 +64,8 @@ export class LiveAgentChannel implements AgentChannel {
   send(frame: RoundFrame): void {
     if (this.closed) throw new Error("socket disconnected");
     if (this.turn !== null) throw new Error("previous turn still unresolved");
+    if(frame.rulesVersion&&frame.rulesVersion!==ACTIVE_FRONTIER_RULES_VERSION)
+      throw new Error("runner_transport_rules_mismatch");
     this.turn = frame.state.turn;
     const { state, budget } = frame;
     this.socket.send(JSON.stringify({
