@@ -78,6 +78,7 @@ export class LiveAgentChannel implements AgentChannel {
       ...(state.frontierObjectiveHold?{
         objectiveHold:state.frontierObjectiveHold,objectiveTarget:3,
         objectiveHoldRounds:3,
+        objectiveSites:state.frontierObjectiveSites??[],
       }:{}),
       stances: state.stances, reserves: state.reserves,
     }));
