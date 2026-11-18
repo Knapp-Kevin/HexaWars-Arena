@@ -37,6 +37,7 @@ export async function createPractice3D(canvas,overlay,{onHex,onUnavailable}){
   const renderer=await createBestRenderer(canvas);
   if(!renderer||renderer.backend!=="webgl2")
     throw new Error("WebGL2 unavailable. The 2D tactical map remains playable.");
+  canvas.dataset.renderer=renderer.backend;
   const state={
     active:false,view:null,options:[],selectedId:null,queued:null,
     bounds:null,terrain:null,epoch:0,animation:null,lastUpload:0,
@@ -69,7 +70,8 @@ export async function createPractice3D(canvas,overlay,{onHex,onUnavailable}){
   function markerTarget(cell,kind){
     const button=document.createElement("button");
     button.type="button";
-    button.className="three-d-target "+kind;
+    button.className="three-d-target "+kind+
+      (state.queued?.to?.q===cell.q&&state.queued?.to?.r===cell.r?" queued":"");
     button.dataset.q=String(cell.q);
     button.dataset.r=String(cell.r);
     const unit=state.view.units.find(u=>u.q===cell.q&&u.r===cell.r);
@@ -88,18 +90,14 @@ export async function createPractice3D(canvas,overlay,{onHex,onUnavailable}){
   function rebuildMarkers(){
     overlay.replaceChildren();state.markers=[];
     if(!state.view)return;
+    for(const unit of state.view.units.filter(u=>u.side==="A")){
+      const cell=state.view.board.find(c=>c.q===unit.q&&c.r===unit.r);
+      if(cell)markerTarget(cell,"select");
+    }
     if(state.selectedId){
       for(const action of state.options){
         const cell=state.view.board.find(c=>c.q===action.to.q&&c.r===action.to.r);
         if(cell)markerTarget(cell,action.kind);
-      }
-      const selected=state.view.units.find(u=>u.id===state.selectedId);
-      const ownCell=selected && state.view.board.find(c=>c.q===selected.q&&c.r===selected.r);
-      if(ownCell)markerTarget(ownCell,"select");
-    }else{
-      for(const unit of state.view.units.filter(u=>u.side==="A")){
-        const cell=state.view.board.find(c=>c.q===unit.q&&c.r===unit.r);
-        if(cell)markerTarget(cell,"select");
       }
     }
   }
