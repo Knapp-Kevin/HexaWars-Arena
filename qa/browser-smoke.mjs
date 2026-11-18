@@ -247,9 +247,16 @@ async function verifyPlayablePractice(mobile=false){
   await page.locator("#start-battle").click();
   await page.waitForFunction(()=>
     document.querySelector("#ready-screen")?.hidden===true&&
-    document.querySelectorAll("#battle-map .cell").length===81&&
+    document.querySelectorAll("#battle-map .cell").length===61&&
     document.querySelector("#round-label")?.textContent?.includes("ROUND 1"),
     undefined,{timeout:30000});
+  assert.equal((await page.locator('input[value="balanced61"]').isChecked()),true,
+    "Unranked game should visibly default to the balanced hex preview");
+  const symmetry=await page.locator("#battle-map .cell").evaluateAll(nodes=>{
+    const coords=new Set(nodes.map(n=>n.dataset.q+","+n.dataset.r));
+    return nodes.every(n=>coords.has(String(-Number(n.dataset.q)-Number(n.dataset.r))+","+n.dataset.r));
+  });
+  assert(symmetry,"Playable arena silhouette is not a mirror-symmetric disk");
   assert.equal((await page.locator("#score-blue").innerText()).trim(),"3");
   assert.equal((await page.locator("#score-red").innerText()).trim(),"3");
   const blue=page.locator('#battle-map .cell[aria-label*="Blue"]').first();
@@ -292,7 +299,7 @@ async function verifyPlayablePractice(mobile=false){
     mobile?"practice-mobile.png":"practice-desktop.png"),fullPage:true});
   assertHealthy(label);
   console.log("PASS Practice "+(mobile?"mobile":"desktop")+
-    ": 81-cell canonical board, selected legal command, AI response, pass round");
+    ": versioned 61-cell balanced board, validated human command and AI response");
   await page.close();
 }
 
@@ -310,7 +317,7 @@ async function verifyInteractiveVerdantPractice(mobile=false){
   await page.waitForFunction(()=>{
     const c=document.querySelector("#game-3d");
     return c&&!c.hidden&&c.dataset.renderer==="webgl2"&&
-      c.dataset.boardCells==="81"&&
+      c.dataset.boardCells==="61"&&
       document.querySelectorAll(".three-d-target.select").length>=2;
   },undefined,{timeout:30000});
   assert.equal(await page.locator("#toggle-3d").getAttribute("aria-pressed"),"true");
@@ -363,7 +370,7 @@ async function verifyInteractiveVerdantPractice(mobile=false){
   await page.locator("#commit-round").click();
   await page.waitForFunction(()=>document.querySelector("#round-label")?.textContent?.includes("ROUND 2"),
     undefined,{timeout:30000});
-  assert.equal(await c.getAttribute("data-board-cells"),"81");
+  assert.equal(await c.getAttribute("data-board-cells"),"61");
   await page.screenshot({path:resolve(screenshots,
     mobile?"practice-3d-mobile.png":"practice-3d-desktop.png"),fullPage:true});
   await page.locator("#toggle-3d").click();
@@ -373,7 +380,29 @@ async function verifyInteractiveVerdantPractice(mobile=false){
     "3D GPU view remained on top of the 2D fallback");
   assertHealthy(label);
   await page.close();
-  console.log(`PASS Playable Verdant ${mobile?"mobile":"desktop"}: canonical 81-cell board, zoom, selection, action and 2D fallback`);
+  console.log(`PASS Playable Verdant ${mobile?"mobile":"desktop"}: balanced 61-hex practice, zoom, canonical orders and 2D fallback`);
+}
+
+async function verifyOriginalLegacyArena(){
+  const page=await newPage("legacy81");
+  const response=await page.goto(new URL("./practice.html",base).href,
+    {waitUntil:"domcontentloaded",timeout:30000});
+  assert(response?.ok(),"Original arena page failed");
+  await page.locator('input[name="arena-topology"][value="legacy81"]').check();
+  await page.locator("#start-battle").click();
+  await page.waitForFunction(()=>
+    document.querySelectorAll("#battle-map .cell").length===81&&
+    document.querySelector("#ready-screen")?.hidden===true,
+    undefined,{timeout:30000});
+  assert((await page.locator("#event-label").innerText()).includes("Classic Arena"),
+    "Historical map is not explicitly labeled");
+  await page.locator("#skip-round").click();
+  await page.waitForFunction(()=>
+    document.querySelector("#round-label")?.textContent?.includes("ROUND 2"),
+    undefined,{timeout:30000});
+  assertHealthy("legacy81");
+  await page.close();
+  console.log("PASS Historic 81-cell arena remains selectable and playable");
 }
 
 try {
@@ -382,6 +411,7 @@ try {
   await verifyMobileViewport();
   await verifyPlayablePractice(false);
   await verifyPlayablePractice(true);
+  await verifyOriginalLegacyArena();
   await verifyInteractiveVerdantPractice(false);
   await verifyInteractiveVerdantPractice(true);
   console.log(`PASS: browser acceptance at ${base.href}`);
