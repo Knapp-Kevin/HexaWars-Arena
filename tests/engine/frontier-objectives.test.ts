@@ -10,6 +10,8 @@ import {runFrontierRoleRound,runFrontierObjectiveRound}
 import {checkVictory} from "../../src/engine/victory.ts";
 import {newBudget,applyCarryover} from "../../src/engine/round-state.ts";
 import {validateFrontierRoundPlan} from "../../src/gateway/frontier-round-validator.ts";
+import {validateMovePath} from "../../src/gateway/validator/move-path.ts";
+import {FRONTIER_ROLE_MOVE_POINTS} from "../../src/engine/constants.ts";
 import {projectSeatObservation} from "../../src/gateway/observation.ts";
 import type {CubeCoord,MatchState,Unit,FrontierRoundPlan} from "../../src/shared/types.ts";
 
@@ -154,54 +156,78 @@ describe("single Frontier five-site strategic control",()=>{
 });
 
 
+/**
+ * A movement unit has an exact distance per turn (e.g. Raider speed 2),
+ * not an arbitrary movement radius. Greedy hex-distance descent can get
+ * stranded one hex away from the target. Search the real validator's graph
+ * of legal per-round endpoints, not a fantasy shortest hex walk.
+ */
+function nextLegalObjectiveMove(state:MatchState,unit:Unit,target:CubeCoord){
+  const range=FRONTIER_ROLE_MOVE_POINTS[unit.type];
+  const terrain=new Set(state.visible
+    .filter(c=>c.terrain!=="mountain"&&c.terrain!=="water")
+    .map(c=>key(c.position)));
+  const queue:{at:CubeCoord;first:{unitId:string;from:CubeCoord;to:CubeCoord}|null}[]=[
+    {at:unit.position,first:null},
+  ];
+  const visited=new Set([key(unit.position)]);
+  for(let head=0;head<queue.length;head++){
+    const node=queue[head];
+    const virtual:MatchState={...state,units:state.units.map(u=>
+      u.id===unit.id?{...u,position:node.at}:u)};
+    for(let dq=-range;dq<=range;dq++){
+      for(let dr=-range;dr<=range;dr++){
+        const ds=-dq-dr;
+        if(Math.max(Math.abs(dq),Math.abs(dr),Math.abs(ds))!==range)continue;
+        const to:CubeCoord={q:node.at.q+dq,r:node.at.r+dr,s:node.at.s+ds};
+        const destination=key(to);
+        if(visited.has(destination)||!terrain.has(destination))continue;
+        const move={unitId:unit.id,from:{...node.at},to};
+        const checked=validateMovePath({bid:0,extras:[],freeMove:move},
+          "A",virtual,true);
+        if(!checked.ok)continue;
+        const first=node.first??move;
+        if(destination===key(target))return first;
+        visited.add(destination);
+        queue.push({at:to,first});
+      }
+    }
+  }
+  return null;
+}
+
 describe("objective majority is reachable through actual legal movement from standard spawns",()=>{
-  it("the Scout, Captain and Raider can earn a non-elimination win over a passive opponent",()=>{
+  it("Scout, Captain and Raider earn real non-elimination wins in four seeded boards",()=>{
+    const assignments=[
+      {role:"scout",target:FRONTIER_OBJECTIVES[0]},
+      {role:"captain",target:FRONTIER_OBJECTIVES[1]},
+      {role:"raider",target:FRONTIER_OBJECTIVES[2]},
+    ] as const;
     for(let seedIndex=0;seedIndex<4;seedIndex++){
       let state=createFrontierObjectiveMatch("reachable-objectives-"+seedIndex);
       let budgetA=newBudget(),budgetB=newBudget();
-      let claims=0,won=false;
-      const roles=["scout","captain","raider"] as const;
-      const objectives=[FRONTIER_OBJECTIVES[0],FRONTIER_OBJECTIVES[1],
-        FRONTIER_OBJECTIVES[2]];
+      let claims=0,won=false,moves=0;
       for(let round=0;round<30;round++){
-        const moves:{unitId:string;from:CubeCoord;to:CubeCoord}[]=[];
-        for(let i=0;i<roles.length;i++){
-          const unit=state.units.find(u=>u.owner==="A"&&u.type===roles[i]);
+        let freeMove:FrontierRoundPlan["freeMove"];
+        for(const {role,target} of assignments){
+          const unit=state.units.find(u=>u.owner==="A"&&u.type===role);
           expect(unit).toBeDefined();
-          const target=objectives[i];
-          const startDistance=Math.max(
-            Math.abs(unit!.position.q-target.q),
-            Math.abs(unit!.position.r-target.r),
-            Math.abs(unit!.position.s-target.s));
-          if(startDistance===0)continue;
-          const candidates=state.visible.filter(c=>c.terrain!=="water"&&
-            c.terrain!=="mountain").map(c=>({
-              destination:c.position,
-              distance:Math.max(Math.abs(c.position.q-target.q),
-                Math.abs(c.position.r-target.r),Math.abs(c.position.s-target.s)),
-            })).filter(c=>c.distance<startDistance)
-            .sort((a,b)=>a.distance-b.distance||
-              a.destination.q-b.destination.q||a.destination.r-b.destination.r);
-          for(const candidate of candidates){
-            const move={unitId:unit!.id,from:{...unit!.position},to:{...candidate.destination}};
-            const trial:FrontierRoundPlan={...pass,freeMove:moves[0]??move,
-              ...(moves.length?{secondMove:move}:{})};
-            if(validateFrontierRoundPlan(trial,"A",state,applyCarryover(budgetA),true).ok){
-              moves.push(move);break;
-            }
-          }
-          if(moves.length===2)break;
+          if(same(unit!.position,target))continue;
+          freeMove=nextLegalObjectiveMove(state,unit!,target)??undefined;
+          expect(freeMove).toBeDefined();
+          break;
         }
-        const aPlan:FrontierRoundPlan={...pass,
-          ...(moves.length?{freeMove:moves[0]}:{}),
-          ...(moves.length>1?{secondMove:moves[1]}:{})};
-        const result=runFrontierObjectiveRound({
+        const aPlan:FrontierRoundPlan={
+          ...pass,...(freeMove?{freeMove}:{})};
+        expect(validateFrontierRoundPlan(aPlan,"A",state,
+          applyCarryover(budgetA),true).ok).toBe(true);
+        const step=runFrontierObjectiveRound({
           matchId:"reachable-"+seedIndex,round,state,planA:aPlan,planB:pass,
           budgetA,budgetB,
         });
-        state=result.nextState;
-        budgetA=result.nextBudgetA;budgetB=result.nextBudgetB;
-        claims+=result.events.filter(e=>e.type==="territory_claimed"&&
+        state=step.nextState;budgetA=step.nextBudgetA;budgetB=step.nextBudgetB;
+        moves+=step.events.filter(e=>e.type==="unit_moved").length;
+        claims+=step.events.filter(e=>e.type==="territory_claimed"&&
           e.payload.owner==="A").length;
         const victory=checkVictory(state);
         if(victory.winner==="A"){
@@ -214,6 +240,7 @@ describe("objective majority is reachable through actual legal movement from sta
         }
       }
       expect(claims).toBeGreaterThanOrEqual(3);
+      expect(moves).toBeGreaterThanOrEqual(3);
       expect(won).toBe(true);
     }
   },15000);
