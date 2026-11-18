@@ -356,3 +356,20 @@ test("live rule validator rejects forged local-practice origin on BOTH versioned
       "Canonical legal path failed strict validator");
   }
 });
+
+test("browser-published round engine burns sealed bid AP and refuses malformed bids",()=>{
+  const game=newPractice("bid-browser-regression","legacy81");
+  const plain={bid:0,extras:[]};
+  const outcome=runRound({
+    matchId:game.matchId,round:0,state:game.state,
+    planA:{bid:3,extras:[]},planB:plain,
+    budgetA:game.budgetA,budgetB:game.budgetB,
+  });
+  assert.equal(outcome.nextBudgetA.apPool,2,
+    "Browser rules improperly refunded the sealed three-AP bid");
+  assert.equal(outcome.nextBudgetB.apPool,4);
+  for(const bid of [-1,.5,Number.NaN,Infinity]){
+    assert.deepEqual(validateRoundPlan({bid,extras:[]},"A",game.state,game.budgetA),
+      {ok:false,reason:"bid_invalid"});
+  }
+});
