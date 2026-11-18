@@ -1,10 +1,12 @@
 import type { Database } from "bun:sqlite";
 import type { MatchRecord, MatchState, AgentRoundBudget, RoundPlan } from "../shared/types.ts";
-import { createMatch } from "../engine/match.ts";
-import { runRound } from "../engine/roundDriver.ts";
+import {
+  createFrontierRoleMatch,ACTIVE_FRONTIER_RULES_VERSION,ACTIVE_FRONTIER_TOPOLOGY,
+} from "../engine/frontier-match.ts";
+import { runFrontierRoleRound } from "../engine/roundDriver.ts";
 import { newBudget, PASS_PLAN, applyCarryover } from "../engine/round-state.ts";
 import { ROUND_CAP } from "../engine/constants.ts";
-import { validateRoundPlan } from "../gateway/validator.ts";
+import { validateFrontierRoundPlan } from "../gateway/frontier-round-validator.ts";
 import { checkVictory } from "../engine/victory.ts";
 import { projectSeatObservation } from "../gateway/observation.ts";
 import {
@@ -94,7 +96,8 @@ function sendRoundFrame(
   state: MatchState,
   budget: AgentRoundBudget,
 ): void {
-  channel.send({ state, budget });
+  channel.send({state,budget,rulesVersion:ACTIVE_FRONTIER_RULES_VERSION,
+    topology:ACTIVE_FRONTIER_TOPOLOGY,maxMoveSlots:2,maxFreeAttacks:1});
 }
 
 export class MatchRunner {
@@ -136,7 +139,9 @@ export class MatchRunner {
     };
     saveMatch(this.db, { ...matchRecord, originTag: "ladder" });
 
-    let state: MatchState = createMatch(ctx.seed, String(ctx.a.id), String(ctx.b.id));
+    // New competitive matches use the identical Frontier127 five-role source
+    // as public practice. Historical 81-cell createMatch remains replay-only.
+    let state: MatchState = createFrontierRoleMatch(ctx.seed);
     let budgetA: AgentRoundBudget = newBudget();
     let budgetB: AgentRoundBudget = newBudget();
     let round = 0;
@@ -177,11 +182,13 @@ export class MatchRunner {
       }
 
       // Advertise and validate the SAME spendable current-round AP that
-      // runRound will use after refreshing base AP + previous carry.
+      // runFrontierRoleRound will use after refreshing base AP + previous carry.
       const spendableA=applyCarryover(budgetA);
       const spendableB=applyCarryover(budgetB);
-      sendRoundFrame(channels.a, projectSeatObservation(state, "A"), spendableA);
-      sendRoundFrame(channels.b, projectSeatObservation(state, "B"), spendableB);
+      sendRoundFrame(channels.a,
+        projectSeatObservation(state,"A","frontier-five-roles-v1"),spendableA);
+      sendRoundFrame(channels.b,
+        projectSeatObservation(state,"B","frontier-five-roles-v1"),spendableB);
 
       const [resA, resB] = await Promise.all([
         withTimeout(receivePlanFromChannel(channels.a), turnTimeoutMs, closed.signal),
@@ -205,16 +212,16 @@ export class MatchRunner {
       const planA = resA.value;
       const planB = resB.value;
 
-      const invalidA = validateRoundPlan(planA, "A", state, spendableA);
+      const invalidA = validateFrontierRoundPlan(planA, "A", state, spendableA,true);
       if (!invalidA.ok) {
         return complete(this.endInvalidPlan(ctx.matchId, ctx.b.id, "A", invalidA.reason));
       }
-      const invalidB = validateRoundPlan(planB, "B", state, spendableB);
+      const invalidB = validateFrontierRoundPlan(planB, "B", state, spendableB,true);
       if (!invalidB.ok) {
         return complete(this.endInvalidPlan(ctx.matchId, ctx.a.id, "B", invalidB.reason));
       }
 
-      const result = runRound({
+      const result = runFrontierRoleRound({
         matchId: ctx.matchId, round, state,
         planA, planB, budgetA, budgetB,
       });

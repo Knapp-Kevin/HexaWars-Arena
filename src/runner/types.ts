@@ -21,6 +21,11 @@ export interface RunnerContext {
 export interface RoundFrame {
   state: MatchState;
   budget: AgentRoundBudget;
+  /** Single active game identity, also carried by public WebSocket STATE. */
+  rulesVersion?: string;
+  topology?: "frontier127";
+  maxMoveSlots?: 2;
+  maxFreeAttacks?: 1;
 }
 
 export interface AgentChannel {
