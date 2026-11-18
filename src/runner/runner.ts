@@ -2,7 +2,7 @@ import type { Database } from "bun:sqlite";
 import type { MatchRecord, MatchState, AgentRoundBudget, RoundPlan } from "../shared/types.ts";
 import { createMatch } from "../engine/match.ts";
 import { runRound } from "../engine/roundDriver.ts";
-import { newBudget, PASS_PLAN } from "../engine/round-state.ts";
+import { newBudget, PASS_PLAN, applyCarryover } from "../engine/round-state.ts";
 import { ROUND_CAP } from "../engine/constants.ts";
 import { validateRoundPlan } from "../gateway/validator.ts";
 import { checkVictory } from "../engine/victory.ts";
@@ -176,8 +176,12 @@ export class MatchRunner {
         return complete(this.endTimeout(ctx.matchId, null));
       }
 
-      sendRoundFrame(channels.a, projectSeatObservation(state, "A"), budgetA);
-      sendRoundFrame(channels.b, projectSeatObservation(state, "B"), budgetB);
+      // Advertise and validate the SAME spendable current-round AP that
+      // runRound will use after refreshing base AP + previous carry.
+      const spendableA=applyCarryover(budgetA);
+      const spendableB=applyCarryover(budgetB);
+      sendRoundFrame(channels.a, projectSeatObservation(state, "A"), spendableA);
+      sendRoundFrame(channels.b, projectSeatObservation(state, "B"), spendableB);
 
       const [resA, resB] = await Promise.all([
         withTimeout(receivePlanFromChannel(channels.a), turnTimeoutMs, closed.signal),
@@ -201,11 +205,11 @@ export class MatchRunner {
       const planA = resA.value;
       const planB = resB.value;
 
-      const invalidA = validateRoundPlan(planA, "A", state, budgetA);
+      const invalidA = validateRoundPlan(planA, "A", state, spendableA);
       if (!invalidA.ok) {
         return complete(this.endInvalidPlan(ctx.matchId, ctx.b.id, "A", invalidA.reason));
       }
-      const invalidB = validateRoundPlan(planB, "B", state, budgetB);
+      const invalidB = validateRoundPlan(planB, "B", state, spendableB);
       if (!invalidB.ok) {
         return complete(this.endInvalidPlan(ctx.matchId, ctx.a.id, "B", invalidB.reason));
       }

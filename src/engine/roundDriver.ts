@@ -58,8 +58,11 @@ export function runRound(input: RunRoundInput): RunRoundResult {
     units: liveUnits,
   };
 
-  const startA = applyCarryover(deductBid(input.budgetA, input.planA.bid));
-  const startB = applyCarryover(deductBid(input.budgetB, input.planB.bid));
+  // Replenish this round's available AP BEFORE burning sealed initiative
+  // bids. The old order reset apPool after the deduction and quietly made
+  // every bid free. Both human and external-agent matches share this engine.
+  const startA = deductBid(applyCarryover(input.budgetA), input.planA.bid);
+  const startB = deductBid(applyCarryover(input.budgetB), input.planB.bid);
 
   const firstAgent = order.first;
   const firstPlan = firstAgent === "A" ? input.planA : input.planB;

@@ -56,6 +56,24 @@ function passPlan(bid = 0): RoundPlan {
 }
 
 describe("runRound", () => {
+  it("actually burns initiative AP after replenishment, not silently for free", () => {
+    const state=mkState([unit("a1","A",cube(0,0)),unit("b1","B",cube(3,0))]);
+    const a=runRound({matchId:"bid-ap-regression",round:0,state,
+      planA:passPlan(3),planB:passPlan(0),
+      budgetA:budget(),budgetB:budget()});
+    // A begins with 3 AP, burns all 3 then refunds 2 unused free slots.
+    // B burns nothing and is capped at 4 after its slot refunds.
+    expect(a.nextBudgetA.apPool).toBe(2);
+    expect(a.nextBudgetB.apPool).toBe(4);
+    expect(a.nextBudgetA.apCarry).toBe(1);
+    const b=runRound({matchId:"bid-ap-regression",round:1,state:a.nextState,
+      planA:passPlan(3),planB:passPlan(0),
+      budgetA:a.nextBudgetA,budgetB:a.nextBudgetB});
+    // Next round starts with base 3 + carry 1, then burns bid 3.
+    expect(b.nextBudgetA.apPool).toBe(3);
+    expect(b.nextBudgetB.apPool).toBe(4);
+  });
+
   it("advances turn by 1", () => {
     const state = mkState([unit("a1", "A", cube(0, 0)), unit("b1", "B", cube(3, 0))]);
     const r = runRound({
