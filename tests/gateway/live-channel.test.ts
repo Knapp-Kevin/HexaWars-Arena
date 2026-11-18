@@ -105,6 +105,39 @@ describe("live agent channel: one explicit five-role Frontier contract",()=>{
     expect(channel.closed).toBe(true);
   });
 
+  test("live rounds come only from bound Frontier channels, not spectator simulator",async()=>{
+    const presence=new PresenceTracker(),live=new LiveConnections(presence);
+    const a=socket(),b=socket();
+    expect(live.activeRound(matchId)).toBeNull();
+    expect(live.open(10,a)).toBe(true);
+    expect(live.open(20,b)).toBe(true);
+    expect(live.activeRound(matchId)).toBeNull();
+    const pair=live.bind(10,20,matchId)!;
+    expect(live.activeRound("other-match")).toBeNull();
+    expect(live.activeRound(matchId)).toBe(0);
+    const first=frame();
+    pair.a.send(first);
+    pair.b.send({...first,state:{...first.state,turn:0}});
+    expect(live.activeRound(matchId)).toBe(0);
+    expect(pair.a.acceptMessage(wire(pass))).toBe(true);
+    expect(await pair.a.receivePlan()).toEqual(pass);
+    // A completed round plan must not make the match disappear until END.
+    expect(live.activeRound(matchId)).toBe(0);
+    const second={...first,state:{...first.state,turn:1}};
+    pair.a.send(second);
+    pair.b.acceptMessage(wire(pass));
+    expect(await pair.b.receivePlan()).toEqual(pass);
+    pair.b.send(second);
+    expect(live.activeRound(matchId)).toBe(1);
+    live.complete(10,20,matchId,{winnerOperatorId:10,reason:"decisive"});
+    expect(live.activeRound(matchId)).toBeNull();
+    expect(live.available(10)).toBe(true);
+    expect(live.available(20)).toBe(true);
+    expect(JSON.stringify(a.messages)).not.toContain("private-not-public");
+    live.close(10,a);live.close(20,b);
+    expect(presence.size()).toBe(0);
+  });
+
   test("HELLO declares one 127-cell 5v5 ruleset, no seed; operator cleanup preserved",()=>{
     const presence=new PresenceTracker(),live=new LiveConnections(presence);
     const a=socket(),b=socket();
