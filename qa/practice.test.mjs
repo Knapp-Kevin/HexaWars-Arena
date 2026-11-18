@@ -295,6 +295,10 @@ test("balanced61 is separately versioned, symmetric and uses the same engine com
     const classic=newPractice(seed,"legacy81");
     assert.equal(classic.state.visible.length,81);
     assert.equal(classic.rulesVersion,"hexawars-legacy81-v1");
+    assert.equal(classic.matchId,`practice:${seed}`,
+      "Legacy match ID must remain byte-for-byte compatible");
+    assert.notEqual(game.matchId,classic.matchId,
+      "Versioned balanced rules cannot reuse legacy replay identity");
     assert.deepEqual(classic.state,createMatch(seed));
   }
   assert.throws(()=>newPractice("seed","other"),/Unsupported board topology/);
