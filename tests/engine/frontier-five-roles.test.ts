@@ -1,7 +1,7 @@
 import {describe,expect,test} from "bun:test";
 import {initFrontierBoard} from "../../src/engine/board.ts";
 import {createUnit,createFrontierRoleUnit,getAllUnits,placeFrontierRoleUnits,FRONTIER_ROLES} from "../../src/engine/units.ts";
-import {RANGE,MOVE_POINTS} from "../../src/engine/constants.ts";
+import {RANGE,MOVE_POINTS,FRONTIER_ROLE_MOVE_POINTS} from "../../src/engine/constants.ts";
 import {resolveFrontierRoleCombat,FRONTIER_ROLE_SPECIALS} from "../../src/engine/frontier-role-combat.ts";
 import {visibleCellsSymmetric} from "../../src/engine/fog-corrected.ts";
 import {validateFrontierRoundPlan} from "../../src/gateway/frontier-round-validator.ts";
@@ -61,10 +61,14 @@ describe("one Frontier battle with five genuine tactical classes",()=>{
       ["captain",1,1,7,7]]).toEqual([
       ...FRONTIER_ROLES.map(role=>{
         const u=troop("A",role,0,0);
-        return [role,MOVE_POINTS[role],RANGE[role],u.hp,u.strength];
+        return [role,FRONTIER_ROLE_MOVE_POINTS[role],RANGE[role],u.hp,u.strength];
       }),
     ]);
     expect(Object.keys(FRONTIER_ROLE_SPECIALS).sort()).toEqual([...FRONTIER_ROLES].sort());
+    expect(MOVE_POINTS.scout).toBe(3);
+    expect(FRONTIER_ROLE_MOVE_POINTS.scout).toBe(2);
+    expect(createUnit("A",p(0,0),"scout").hp).toBe(3);
+    expect(createFrontierRoleUnit("A",p(0,0),"scout").hp).toBe(5);
   });
 
   test("Scout alone sees up to four open hexes; the corrected three-hex role baseline remains intact",()=>{
