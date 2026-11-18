@@ -247,18 +247,44 @@ async function verifyPlayablePractice(mobile=false){
   await page.locator("#start-battle").click();
   await page.waitForFunction(()=>
     document.querySelector("#ready-screen")?.hidden===true&&
-    document.querySelectorAll("#battle-map .cell").length===61&&
+    document.querySelectorAll("#battle-map .cell").length===127&&
     document.querySelector("#round-label")?.textContent?.includes("ROUND 1"),
     undefined,{timeout:30000});
-  assert.equal((await page.locator('input[value="balanced61"]').isChecked()),true,
-    "Unranked game should visibly default to the balanced hex preview");
+  assert.equal((await page.locator('input[value="frontier127"]').isChecked()),true,
+    "The human default should be the larger Frontier board");
   const symmetry=await page.locator("#battle-map .cell").evaluateAll(nodes=>{
     const coords=new Set(nodes.map(n=>n.dataset.q+","+n.dataset.r));
-    return nodes.every(n=>coords.has(String(-Number(n.dataset.q)-Number(n.dataset.r))+","+n.dataset.r));
+    return nodes.every(n=>coords.has(String(-Number(n.dataset.q))+","+String(-Number(n.dataset.r))));
   });
   assert(symmetry,"Playable arena silhouette is not a mirror-symmetric disk");
-  assert.equal((await page.locator("#score-blue").innerText()).trim(),"3");
-  assert.equal((await page.locator("#score-red").innerText()).trim(),"3");
+  assert.equal((await page.locator("#score-blue").innerText()).trim(),"5");
+  assert.equal((await page.locator("#score-red").innerText()).trim(),"5");
+  // A larger tactical board is only usable if its viewport can actually be
+  // inspected without changing legal orders or losing the full-map overview.
+  const map=page.locator("#battle-map");
+  const initialView=(await map.getAttribute("viewBox")).split(" ").map(Number);
+  assert(await page.locator("#game-3d-in").isVisible(),
+    "2D player cannot access map zoom controls");
+  await page.locator("#game-3d-in").click();
+  const zoomedView=(await map.getAttribute("viewBox")).split(" ").map(Number);
+  assert(zoomedView[2]<initialView[2]*.85,
+    "The 2D zoom button must enlarge the map, not just its container");
+  if(!mobile){
+    const box=await map.boundingBox();
+    const x=box.x+box.width/2,y=box.y+box.height/2;
+    await page.mouse.move(x,y);
+    await page.mouse.down();
+    await page.mouse.move(x+72,y+35,{steps:5});
+    await page.mouse.up();
+    const pannedView=(await map.getAttribute("viewBox")).split(" ").map(Number);
+    assert(pannedView[0]!==zoomedView[0]||pannedView[1]!==zoomedView[1],
+      "Dragging a zoomed 2D battlefield must pan the world");
+  }
+  await page.locator("#game-3d-reset").click();
+  const fittedView=(await map.getAttribute("viewBox")).split(" ").map(Number);
+  assert(Math.abs(fittedView[2]-initialView[2])<.1,
+    "Fit button must restore the entire tactical board");
+
   const blue=page.locator('#battle-map .cell[aria-label*="Blue"]').first();
   assert(await blue.count()>0,"No blue unit in practice mode");
   await blue.click();
@@ -313,7 +339,7 @@ async function verifyPlayablePractice(mobile=false){
     mobile?"practice-mobile.png":"practice-desktop.png"),fullPage:true});
   assertHealthy(label);
   console.log("PASS Practice "+(mobile?"mobile":"desktop")+
-    ": versioned 61-cell balanced board, validated human command and AI response");
+    ": versioned 127-cell Frontier, validated human command and AI response");
   await page.close();
 }
 
@@ -331,7 +357,7 @@ async function verifyInteractiveVerdantPractice(mobile=false){
   await page.waitForFunction(()=>{
     const c=document.querySelector("#game-3d");
     return c&&!c.hidden&&c.dataset.renderer==="webgl2"&&
-      c.dataset.boardCells==="61"&&
+      c.dataset.boardCells==="127"&&
       document.querySelectorAll(".three-d-target.select").length>=2;
   },undefined,{timeout:30000});
   assert.equal(await page.locator("#toggle-3d").getAttribute("aria-pressed"),"true");
@@ -386,7 +412,7 @@ async function verifyInteractiveVerdantPractice(mobile=false){
   await page.locator("#commit-round").click();
   await page.waitForFunction(()=>document.querySelector("#round-label")?.textContent?.includes("ROUND 2"),
     undefined,{timeout:30000});
-  assert.equal(await c.getAttribute("data-board-cells"),"61");
+  assert.equal(await c.getAttribute("data-board-cells"),"127");
   await page.screenshot({path:resolve(screenshots,
     mobile?"practice-3d-mobile.png":"practice-3d-desktop.png"),fullPage:true});
   await page.locator("#toggle-3d").click();
@@ -400,7 +426,7 @@ async function verifyInteractiveVerdantPractice(mobile=false){
     "Human free-action slot missing from playback UI");
   assertHealthy(label);
   await page.close();
-  console.log(`PASS Playable Verdant ${mobile?"mobile":"desktop"}: balanced 61-hex practice, zoom, canonical orders and 2D fallback`);
+  console.log(`PASS Playable Verdant ${mobile?"mobile":"desktop"}: Frontier127, five squads and canonical orders`);
 }
 
 async function verifyOriginalLegacyArena(){
@@ -434,13 +460,13 @@ async function verifyFinishedMatchAndRematch(mobile=false){
   assert(response?.ok());
   await page.locator("#start-battle").click();
   await page.waitForFunction(()=>document.querySelector("#ready-screen")?.hidden===true &&
-    document.querySelectorAll("#battle-map .cell").length===61,
+    document.querySelectorAll("#battle-map .cell").length===127,
     undefined,{timeout:30000});
   if(mobile){
     await page.locator("#toggle-3d").click();
     await page.waitForFunction(()=>
       document.querySelector("#game-3d")?.dataset.renderer==="webgl2" &&
-      document.querySelector("#game-3d")?.dataset.boardCells==="61" &&
+      document.querySelector("#game-3d")?.dataset.boardCells==="127" &&
       document.querySelectorAll(".three-d-tray-choice.select").length>0,
       undefined,{timeout:30000});
     await page.locator(".three-d-tray-choice.select:visible").first().click();
