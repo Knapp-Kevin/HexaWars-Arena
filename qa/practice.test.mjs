@@ -425,7 +425,7 @@ test("human can queue a canonically legal attack newly reachable AFTER its free 
   const actor={id:"stage-a",owner:"A",type:"scout",weight:1,
     position:at(0,0),hp:3,strength:2};
   const spotter={id:"stage-spotter",owner:"A",type:"infantry",weight:2,
-    position:at(2,1),hp:5,strength:3};
+    position:at(4,-1),hp:5,strength:3};
   const target={id:"stage-b",owner:"B",type:"infantry",weight:2,
     position:at(4,0),hp:5,strength:3};
   game.state.units=[actor,spotter,target];
