@@ -1,5 +1,5 @@
 import type { ExtraEntry } from "../../shared/types";
-import { BID_MIN } from "../../engine/constants";
+import { BID_MIN } from "../../engine/constants.ts";
 
 const EXTRA_COST: Record<Exclude<ExtraEntry["kind"], undefined>, number> = {
   boosted_ability: 1,
