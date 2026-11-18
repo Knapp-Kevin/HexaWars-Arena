@@ -321,6 +321,9 @@ async function verifyPlayablePractice(mobile=false){
   const targets=page.locator("#battle-map .cell.available, #battle-map .cell.attack");
   const optionsCount=await targets.count();
   assert(optionsCount>0,"Selection does not expose legal destinations");
+  const originalUnitId=await page.locator(
+    '#squad-roster button[aria-pressed="true"]').getAttribute("data-unit-id");
+  assert(originalUnitId,"First human order must belong to an actually selected unit");
   const firstIsAttack=await targets.first().evaluate(el=>el.classList.contains("attack"));
   await targets.first().click();
   await page.waitForFunction(()=>!document.querySelector("#commit-round")?.disabled,
@@ -374,8 +377,27 @@ async function verifyPlayablePractice(mobile=false){
   const clear=page.locator(firstIsAttack?"#clear-attack":"#clear-move");
   assert(await clear.isEnabled(),"Queued action is not individually reversible");
   await clear.click();
+  // Clearing Move 1 is an asynchronous Worker transaction. A disabled
+  // submit button may mean BUSY, not yet that the order was cleared.
+  // Require the actual cleared slot AND an idle input state first.
+  await page.waitForFunction(isAttack=>{
+    const slot=document.querySelector(isAttack?"#planned-attack":"#planned-move");
+    const clearButton=document.querySelector(isAttack?"#clear-attack":"#clear-move");
+    return slot?.textContent?.trim()==="Not set" &&
+      clearButton?.disabled===true &&
+      document.querySelector("#commit-round")?.disabled===true &&
+      document.querySelector("#skip-round")?.disabled===false;
+  },firstIsAttack,{timeout:15000});
   assert(await page.locator("#commit-round").isDisabled(),
     "Clearing the only queued order should disarm commit");
+  // Reselect the original actor after the command reset, not a stale
+  // highlighted hex belonging to another squad's abandoned move.
+  await page.locator('#squad-roster button[data-unit-id="'+originalUnitId+'"]').click();
+  await page.waitForFunction(id=>
+    [...document.querySelectorAll("#squad-roster button")].some(b=>
+      b.dataset.unitId===id&&b.getAttribute("aria-pressed")==="true")&&
+    document.querySelectorAll("#battle-map .cell.available, #battle-map .cell.attack").length>0,
+    originalUnitId,{timeout:15000});
   await targets.first().click();
   await page.waitForFunction(()=>!document.querySelector("#commit-round")?.disabled,
     undefined,{timeout:15000});
