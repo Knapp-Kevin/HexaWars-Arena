@@ -102,6 +102,11 @@
     .three-d-target.select{background:#244e79ec;border:2px solid #9ad1ff;color:#f4faff}
     .three-d-target.move{background:#0c4765de;border:2px solid #bcecff;color:#f2fbff}
     .three-d-target.attack{background:#8f2635ec;border:2px solid #ffb3b9;color:#fff5f5}
+    .three-d-tray{display:none}
+    .three-d-tray-choice{border:1px solid #90b6cb;color:#eaf6ff;background:#22445f}
+    .three-d-tray-choice.attack{border-color:#ff868e;background:#7d2937}
+    .three-d-tray-choice.select{border-color:#8fc8fb;background:#204a73}
+    .three-d-tray-choice.queued{box-shadow:inset 0 0 0 2px #f5cd77}
     .view-switch,.game3d-tools{position:absolute;z-index:3}
     .view-switch{top:10px;right:10px;padding:7px 13px;min-height:38px;font-size:12px;background:#142d44ef;border-color:#b6d6ec}
     .game3d-tools{right:10px;bottom:10px;display:flex;gap:5px;padding:5px;border:1px solid #536d84;border-radius:11px;background:#0b1d30e8}
@@ -112,6 +117,9 @@
       .game3d-tools{right:6px;bottom:7px}
       .game3d-tools button{min-width:38px;min-height:38px}
       .three-d-target{min-width:38px;min-height:38px}
+      .three-d-target{display:none!important}
+      .three-d-tray{position:absolute;left:7px;right:7px;bottom:60px;z-index:3;pointer-events:auto;display:flex;align-items:center;gap:7px;max-height:62px;padding:7px;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;background:#0a2034ed;border:1px solid #58758d;border-radius:11px;box-shadow:0 5px 20px #0008}
+      .three-d-tray-choice{flex:0 0 auto;min-width:96px;min-height:44px;white-space:nowrap;padding:7px 12px;font-size:12px;letter-spacing:.01em}
     }
   </style>
   <script type="module" src="./practice.js"></script>
