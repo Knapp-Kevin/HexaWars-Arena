@@ -159,6 +159,7 @@ test("two real authenticated WebSockets finish a match and fetch persisted repla
       expect(state.rulesVersion).toBe(hello.rulesVersion);
       expect(state.objectiveTarget).toBe(3);
       expect(state.objectiveHold).toEqual({a:0,b:0});
+      expect((state.objectiveSites as unknown[]).length).toBe(5);
       const units=state.units as Array<{owner:string;type:string}>;
       expect(units.length).toBe(5);
       expect(units.every(u=>u.owner===hello.side)).toBe(true);
