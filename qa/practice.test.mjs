@@ -10,7 +10,13 @@ import { checkVictory } from "../src/engine/victory.ts";
 import { validateRoundPlan } from "../dist/pages/rules/gateway/validator.js";
 import { runRound,runFrontierRound } from "../dist/pages/rules/engine/roundDriver.js";
 import {cubeLineSymmetric} from "../dist/pages/rules/engine/fog-corrected.js";
-import {createFrontierRoleMatch,numericFrontierSeed,ACTIVE_FRONTIER_RULES_VERSION} from "../dist/pages/rules/engine/frontier-match.js";
+import {createFrontierRoleMatch,createFrontierObjectiveMatch,numericFrontierSeed,
+  ACTIVE_FRONTIER_RULES_VERSION,ARCHIVED_FRONTIER_ROLES_VERSION}
+  from "../dist/pages/rules/engine/frontier-match.js";
+import {FRONTIER_OBJECTIVES,updateFrontierObjectives}
+  from "../dist/pages/rules/engine/frontier-objectives.js";
+import {runFrontierObjectiveRound}
+  from "../dist/pages/rules/engine/roundDriver.js";
 import { resolveBids } from "../dist/pages/rules/engine/bidResolver.js";
 import { newBudget } from "../dist/pages/rules/engine/round-state.js";
 import { validateFrontierRoundPlan } from "../dist/pages/rules/gateway/frontier-round-validator.js";
@@ -1270,7 +1276,7 @@ test("one canonical Frontier match constructor is byte-identical in browser, eng
     const browser=newPractice(seed,"frontier127","bid-aware-v1","frontier-five-roles-v1");
     assert.deepEqual(browser.state,source,
       "Browser practice may not independently reinterpret five-role board terrain, stats or combat state");
-    assert.equal(browser.rulesVersion,ACTIVE_FRONTIER_RULES_VERSION);
+    assert.equal(browser.rulesVersion,ARCHIVED_FRONTIER_ROLES_VERSION);
     assert.equal(browser.topology,"frontier127");
     assert.equal(source.units.length,10);
     assert.equal(numericSeed(seed),numericFrontierSeed(seed));
@@ -1284,4 +1290,91 @@ test("one canonical Frontier match constructor is byte-identical in browser, eng
     assert.equal(old.visible.length,81);
     assert.equal(old.units.length,6);
   }
+});
+
+
+test("the only playable Frontier profile has five mirrored sites, score/hold and byte-identical shared state",()=>{
+  for(let i=0;i<32;i++){
+    const seed="objective-shared-"+i;
+    const authoritative=createFrontierObjectiveMatch(seed);
+    const game=newPractice(seed,"frontier127","bid-aware-v1","frontier-five-roles-v2");
+    assert.deepEqual(game.state,authoritative);
+    assert.equal(game.rulesVersion,ACTIVE_FRONTIER_RULES_VERSION);
+    assert.equal(game.state.visible.length,127);
+    assert.equal(game.state.visible.filter(c=>c.frontierObjective).length,5);
+    assert.equal(game.state.units.length,10);
+    assert.equal(game.state.score.a+game.state.score.b,0);
+    assert.equal(game.state.frontierObjectiveHold.a,0);
+    assert.equal(game.state.frontierObjectiveHold.b,0);
+    const view=practiceView(game,"A");
+    assert.equal(view.board.filter(c=>c.objective).length,5);
+    assert.deepEqual(view.objectives,{
+      total:5,required:3,holdRequired:3,blue:0,red:0,holdBlue:0,holdRed:0,
+    });
+    assert.equal(view.maxMoves,2);
+    const old=newPractice(seed,"frontier127","bid-aware-v1","frontier-five-roles-v1");
+    assert.equal(old.rulesVersion,ARCHIVED_FRONTIER_ROLES_VERSION);
+    assert.notEqual(old.matchId,game.matchId);
+    assert(!old.state.frontierObjectiveHold);
+    assert.deepEqual(old.state.units,game.state.units);
+    assert.deepEqual(old.state.visible.map(c=>[c.position,c.terrain]),
+      game.state.visible.map(c=>[c.position,c.terrain]));
+    for(const c of authoritative.visible.filter(c=>c.frontierObjective)){
+      const reflected=authoritative.visible.find(other=>
+        other.position.q===-c.position.q&&other.position.r===-c.position.r);
+      assert(reflected?.frontierObjective);
+    }
+  }
+});
+
+test("the published compiled resolver can win by holding 3 actual objective tiles for 3 rounds",()=>{
+  let state=createFrontierObjectiveMatch("objectives-real-win");
+  const a=state.units.filter(u=>u.owner==="A");
+  state={...state,units:state.units.map(u=>{
+    const idx=a.findIndex(v=>v.id===u.id);
+    return idx>=0&&idx<3?{...u,position:{...FRONTIER_OBJECTIVES[idx]}}:u;
+  })};
+  let budgetA=newBudget(),budgetB=newBudget();
+  for(let i=0;i<3;i++){
+    const step=runFrontierObjectiveRound({matchId:"objective-test",round:i,state,
+      planA:{bid:0,extras:[]},planB:{bid:0,extras:[]},budgetA,budgetB});
+    state=step.nextState;budgetA=step.nextBudgetA;budgetB=step.nextBudgetB;
+    assert.equal(state.score.a,3);
+    assert.equal(state.score.b,0);
+    assert.equal(state.frontierObjectiveHold.a,i+1);
+    assert.equal(step.events.filter(e=>e.type==="territory_claimed").length,
+      i===0?3:0);
+    assert.equal(step.ended,i===2);
+  }
+  assert.deepEqual(checkVictory(state),{winner:"A",reason:"territory_control"});
+});
+
+test("the current Frontier bot produces legal two-wave objective pursuit with no third move",()=>{
+  let ordersMade=0,objectiveMovement=0;
+  for(let i=0;i<12;i++){
+    const game=newPractice("objective-bot-"+i,
+      "frontier127","bid-aware-v1","frontier-five-roles-v2");
+    const initialDistance=Math.min(...game.state.units.filter(u=>u.owner==="B").flatMap(
+      u=>FRONTIER_OBJECTIVES.map(c=>Math.max(Math.abs(u.position.q-c.q),
+        Math.abs(u.position.r-c.r),Math.abs(u.position.s-c.s)))));
+    for(let round=0;round<8&&!game.finished;round++){
+      const orders=chooseBotRoundOrders(game,"B");
+      assert(validatePracticeOrders(game,"B",orders).valid);
+      ordersMade++;
+      const moves=[orders.move,orders.move2].filter(Boolean);
+      assert(moves.length<=2);
+      if(moves.length===2)assert.notEqual(moves[0].unitId,moves[1].unitId);
+      if(moves.some(m=>FRONTIER_OBJECTIVES.some(c=>
+        c.q===m.to.q&&c.r===m.to.r)))objectiveMovement++;
+      const before=game.round;
+      advancePractice(game,{bid:0});
+      assert.equal(game.round,before+1);
+      assert(game.state.score.a>=0&&game.state.score.b>=0);
+      assert(game.state.score.a+game.state.score.b<=5);
+    }
+    assert(initialDistance>=0);
+  }
+  assert(ordersMade>=50);
+  assert(objectiveMovement>0,
+    "The bot must visibly approach or enter marked control points");
 });
