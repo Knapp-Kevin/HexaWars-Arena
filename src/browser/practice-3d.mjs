@@ -72,6 +72,11 @@ export async function createPractice3D(canvas,overlay,{onHex,onUnavailable}){
     button.type="button";
     button.className="three-d-target "+kind+
       (state.queued?.to?.q===cell.q&&state.queued?.to?.r===cell.r?" queued":"");
+    // Projected badges are visual; the independently laid-out command ribbon
+    // is the accessible interactive control. The canvas itself still picks
+    // nearest scene hexes on deliberate taps/clicks.
+    button.tabIndex=-1;
+    button.setAttribute("aria-hidden","true");
     button.dataset.q=String(cell.q);
     button.dataset.r=String(cell.r);
     const unit=state.view.units.find(u=>u.q===cell.q&&u.r===cell.r);
@@ -80,10 +85,7 @@ export async function createPractice3D(canvas,overlay,{onHex,onUnavailable}){
     button.setAttribute("aria-label",kind==="select"
       ?`Select Blue ${unit?.type??"squad"} at ${cell.q},${cell.r}`
       :`${kind==="attack"?"Attack":"Move to"} hex ${cell.q},${cell.r}`);
-    button.addEventListener("click",event=>{
-      event.stopPropagation();
-      onHex(cell.q,cell.r);
-    });
+
     overlay.append(button);
     state.markers.push({button,cell,kind});
   }
