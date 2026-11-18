@@ -172,10 +172,31 @@ function planForAction(unit,action){
   }
   return {bid:0,extras:[]};
 }
-export function legalCommands(game,side,unitId,stagedMove=null){
+export function legalCommands(game,side,unitId,stagedMove=null,existingOrders=null){
   if(game.finished||!SIDES.has(side))return [];
   const unit=ownUnits(game,side).find(u=>u.id===unitId);
   if(!unit)return [];
+  // Highlight only choices that can actually be queued with existing orders.
+  // A command can be legal alone but invalid as Move 2 because another
+  // squad has reserved its destination (or because Siege has a queued attack).
+  // The full plan validator remains authoritative: no UI-only exceptions.
+  //
+  // checkedPlan's internal legalCommands calls omit existingOrders, so this
+  // end-to-end preview check is bounded and does not recurse.
+  function queueable(choice){
+    if(existingOrders===null||existingOrders===undefined)return true;
+    const orders=normalizeOrders(existingOrders);
+    const slot=choice.kind==="attack"?"attack"
+      :orders.move?.unitId===unitId?"move"
+      :orders.move2?.unitId===unitId?"move2"
+      :orders.move?"move2":"move";
+    try{
+      checkedPlan(game,side,{...orders,[slot]:choice});
+      return true;
+    }catch{
+      return false;
+    }
+  }
   const budget=side==="A"?game.budgetA:game.budgetB;
   const occupied=new Set(game.state.units.map(u=>key(u.position)));
   const options=[];
@@ -200,7 +221,8 @@ export function legalCommands(game,side,unitId,stagedMove=null){
       !occupied.has(key(to)) && distance(unit.position,to)===unitMoveRange(game,unit)){
       const cmd={kind:"move",unitId,to:clonePos(to)};
       if(validateRoundPlan(planForAction(unit,cmd),side,game.state,
-        side==="A"?game.budgetA:game.budgetB,isFiveRoleGame(game)).ok)options.push(cmd);
+        side==="A"?game.budgetA:game.budgetB,isFiveRoleGame(game)).ok&&
+        queueable(cmd))options.push(cmd);
     }
   }
   for(const enemy of knownEnemyUnits(game,side)){
@@ -211,7 +233,7 @@ export function legalCommands(game,side,unitId,stagedMove=null){
       const trial=planForAction(unit,cmd);
       if(stagedFragment)trial.freeMove=stagedFragment;
       if(validateRoundPlan(trial,side,game.state,budget,
-        isFiveRoleGame(game)).ok)options.push(cmd);
+        isFiveRoleGame(game)).ok&&queueable(cmd))options.push(cmd);
     }
   }
   return options;

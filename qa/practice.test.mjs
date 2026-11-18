@@ -1205,3 +1205,59 @@ test("single Frontier 5-role selfplay closes full matches with actual special ef
     ...t,meanRounds:Number((t.rounds/t.matches).toFixed(2)),
   }));
 });
+
+
+test("human second-wave highlights reject collisions with Move 1 and every displayed choice can queue",()=>{
+  const at=(q,r)=>({q,r,s:-q-r});
+  const game=newPractice("second-wave-contract","frontier127","bid-aware-v1","frontier-five-roles-v1");
+  const scout={id:"A-scout",owner:"A",type:"scout",hp:5,strength:5,weight:1,
+    position:at(-2,0)};
+  const raider={id:"A-raider",owner:"A",type:"raider",hp:5,strength:5,weight:1,
+    position:at(-1,-1)};
+  const other={id:"B-captain",owner:"B",type:"captain",hp:7,strength:7,weight:3,
+    position:at(4,0)};
+  game.state.units=[scout,raider,other];
+  game.state.visible=game.state.visible.map(cell=>({...cell,terrain:"plain",
+    unit:game.state.units.find(u=>u.position.q===cell.position.q&&
+      u.position.r===cell.position.r)}));
+  const move={kind:"move",unitId:scout.id,to:at(0,0)};
+  assert(validatePracticeOrders(game,"A",{move,bid:0}).valid);
+  assert(legalCommands(game,"A",raider.id).some(c=>c.kind==="move"&&
+    c.to.q===0&&c.to.r===0),
+    "The second destination is individually legal before Move 1 is reserved");
+  const reserved={move,bid:0};
+  const options=legalCommands(game,"A",raider.id,null,reserved);
+  assert(!options.some(c=>c.kind==="move"&&c.to.q===0&&c.to.r===0),
+    "The existing first mover must reserve its destination");
+  let validated=0;
+  for(const choice of options.filter(c=>c.kind==="move")){
+    assert(validatePracticeOrders(game,"A",{...reserved,move2:choice}).valid);
+    validated++;
+  }
+  assert(validated>0,"A non-conflicting second move should remain available");
+});
+
+test("every advertised queued-second-move destination validates on 12 actual seeded Frontiers",()=>{
+  let attempted=0,valid=0;
+  for(let i=0;i<12;i++){
+    const game=newPractice("plan-preview-"+i,"frontier127",
+      "bid-aware-v1","frontier-five-roles-v1");
+    const own=game.state.units.filter(u=>u.owner==="A");
+    const first=own.flatMap(u=>legalCommands(game,"A",u.id)
+      .filter(c=>c.kind==="move")).at(0);
+    if(!first)continue;
+    assert(validatePracticeOrders(game,"A",{move:first,bid:0}).valid);
+    const reserved={move:first,bid:0};
+    for(const unit of own.filter(u=>u.id!==first.unitId)){
+      const options=legalCommands(game,"A",unit.id,null,reserved);
+      for(const choice of options.filter(c=>c.kind==="move")){
+        attempted++;
+        assert(validatePracticeOrders(game,"A",{...reserved,move2:choice}).valid,
+          "A highlighted move must be accepted by the identical whole-round validator");
+        valid++;
+      }
+    }
+  }
+  assert(attempted>15,"Need actual distinct-unit two-wave movement opportunities");
+  assert.equal(valid,attempted);
+});
