@@ -418,3 +418,42 @@ test("free round plan preview rejects malformed second slot without advancing st
   assert.throws(()=>validatePracticeOrders(game,"A",{bid:4}),/Initiative bid/);
   assert.deepEqual(game,start);
 });
+
+test("human can queue a canonically legal attack newly reachable AFTER its free move, without revealing fog",()=>{
+  const game=newPractice("staged-preview-evidence","balanced61");
+  const at=(q,r)=>({q,r,s:-q-r});
+  const actor={id:"stage-a",owner:"A",type:"scout",weight:1,
+    position:at(0,0),hp:3,strength:2};
+  const spotter={id:"stage-spotter",owner:"A",type:"infantry",weight:2,
+    position:at(4,-1),hp:5,strength:3};
+  const target={id:"stage-b",owner:"B",type:"infantry",weight:2,
+    position:at(4,0),hp:5,strength:3};
+  game.state.units=[actor,spotter,target];
+  game.state.visible=game.state.visible.map(c=>({
+    ...c,terrain:"plain",controlledBy:undefined,
+    unit:game.state.units.find(u=>u.position.q===c.position.q &&
+      u.position.r===c.position.r),
+  }));
+  const move={kind:"move",unitId:actor.id,to:at(3,0)};
+  const attack={kind:"attack",unitId:actor.id,to:at(4,0)};
+  const before=structuredClone(game);
+  assert(legalCommands(game,"A",actor.id).some(c=>c.kind==="move"&&
+    c.to.q===3&&c.to.r===0),"The scout should have a three-step move");
+  assert(!legalCommands(game,"A",actor.id).some(c=>c.kind==="attack"&&
+    c.to.q===4&&c.to.r===0),"Enemy must be outside initial attack range");
+  const projected=legalCommands(game,"A",actor.id,move);
+  assert(projected.some(c=>c.kind==="attack"&&c.to.q===4&&c.to.r===0),
+    "Known enemy should become attackable from staged destination");
+  assert.equal(validatePracticeOrders(game,"A",{move,attack,bid:1}).valid,true);
+  assert.throws(()=>validatePracticeOrders(game,"A",{move:null,attack,bid:0}),
+    /not legal/,"Attack without the queued move is illegal");
+  assert.deepEqual(game,before,"Plan previews must never mutate a live match");
+
+  // Without the allied spotter, the enemy is beyond existing fog sight.
+  // The speculative move must NOT expose an enemy hidden at round start.
+  game.state.units=game.state.units.filter(u=>u.id!=="stage-spotter");
+  assert(!legalCommands(game,"A",actor.id,move).some(c=>c.kind==="attack"&&
+    c.to.q===4&&c.to.r===0),"Staged preview cannot reveal a hidden enemy");
+  assert.throws(()=>validatePracticeOrders(game,"A",{move,attack,bid:0}),
+    /not legal/,"Hidden targets must not be accepted in human practice");
+});
