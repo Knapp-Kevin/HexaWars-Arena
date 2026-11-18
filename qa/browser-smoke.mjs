@@ -268,8 +268,22 @@ async function verifyPlayablePractice(mobile=false){
   const targets=page.locator("#battle-map .cell.available, #battle-map .cell.attack");
   const optionsCount=await targets.count();
   assert(optionsCount>0,"Selection does not expose legal destinations");
+  const firstIsAttack=await targets.first().evaluate(el=>el.classList.contains("attack"));
   await targets.first().click();
+  await page.waitForFunction(()=>!document.querySelector("#commit-round")?.disabled,
+    undefined,{timeout:15000});
   assert(await page.locator("#commit-round").isEnabled(),"Cannot submit chosen legal order");
+  const clear=page.locator(firstIsAttack?"#clear-attack":"#clear-move");
+  assert(await clear.isEnabled(),"Queued action is not individually reversible");
+  await clear.click();
+  assert(await page.locator("#commit-round").isDisabled(),
+    "Clearing the only queued order should disarm commit");
+  await targets.first().click();
+  await page.waitForFunction(()=>!document.querySelector("#commit-round")?.disabled,
+    undefined,{timeout:15000});
+  await page.locator("#bid-amount").selectOption("1");
+  assert((await page.locator("#bid-budget").innerText()).includes("1 / 3"),
+    "Initiative AP bid is not visible in the plan composer");
   await page.locator("#commit-round").click();
   await page.waitForFunction(()=>
     document.querySelector("#round-label")?.textContent?.includes("ROUND 2"),
@@ -365,6 +379,8 @@ async function verifyInteractiveVerdantPractice(mobile=false){
   const legal=page.locator(".three-d-tray-choice.move:visible,.three-d-tray-choice.attack:visible");
   assert(await legal.count()>0,"No visible legal 3D orders");
   await legal.first().click();
+  await page.waitForFunction(()=>!document.querySelector("#commit-round")?.disabled,
+    undefined,{timeout:15000});
   assert(await page.locator("#commit-round").isEnabled(),
     "3D selected target did not queue a canonical order");
   await page.locator("#commit-round").click();
@@ -378,6 +394,10 @@ async function verifyInteractiveVerdantPractice(mobile=false){
     "Accessible 2D map was not restored after 3D gameplay");
   assert(await page.locator("#game-3d").isHidden(),
     "3D GPU view remained on top of the 2D fallback");
+  assert(await page.locator("#planned-move").isVisible(),
+    "Human free-move slot missing from playback UI");
+  assert(await page.locator("#planned-attack").isVisible(),
+    "Human free-action slot missing from playback UI");
   assertHealthy(label);
   await page.close();
   console.log(`PASS Playable Verdant ${mobile?"mobile":"desktop"}: balanced 61-hex practice, zoom, canonical orders and 2D fallback`);
@@ -435,6 +455,8 @@ async function verifyFinishedMatchAndRematch(mobile=false){
       undefined,{timeout:15000});
     await page.locator("#battle-map .cell.available, #battle-map .cell.attack").first().click();
   }
+  await page.waitForFunction(()=>!document.querySelector("#commit-round")?.disabled,
+    undefined,{timeout:15000});
   assert(await page.locator("#commit-round").isEnabled(),"Legal order not queued for full match");
   await page.locator("#commit-round").click();
   await page.waitForFunction(()=>document.querySelector("#round-label")?.textContent?.includes("ROUND 2"),
