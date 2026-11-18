@@ -39,12 +39,16 @@ export const PRACTICE_TOPOLOGIES=Object.freeze({
   balanced61:"hexawars-balanced61-v1",
   frontier127:"hexawars-frontier127-v1",
 });
-export function newPractice(seed="practice-alpha-01",topology="legacy81"){
+export function newPractice(seed="practice-alpha-01",topology="legacy81",opponentPolicy="legacy-v1"){
   if(typeof seed!=="string" || !/^[a-zA-Z0-9_-]{1,48}$/.test(seed)){
     throw new Error("Seed must be 1–48 letters, digits, underscores or dashes");
   }
   if(!Object.hasOwn(PRACTICE_TOPOLOGIES,topology)){
     throw new Error("Unsupported board topology");
+  }
+  if(!["legacy-v1","bid-aware-v1"].includes(opponentPolicy) ||
+    (opponentPolicy==="bid-aware-v1"&&topology!=="frontier127")){
+    throw new Error("Unsupported opponent policy for this battlefield");
   }
   const encodedSeed=numericSeed(seed);
   const board=topology==="frontier127"
@@ -58,9 +62,12 @@ export function newPractice(seed="practice-alpha-01",topology="legacy81"){
   return {
     // Preserve exact legacy match IDs so seeded historical practice traces
     // remain replayable under their original rules, without reinterpretation.
-    matchId:topology==="legacy81"
-      ?`practice:${seed}`
-      :`practice:${PRACTICE_TOPOLOGIES[topology]}:${seed}`,
+    matchId:opponentPolicy==="bid-aware-v1"
+      ?`practice:${PRACTICE_TOPOLOGIES[topology]}:bot-bid-aware-v1:${seed}`
+      :topology==="legacy81"
+        ?`practice:${seed}`
+        :`practice:${PRACTICE_TOPOLOGIES[topology]}:${seed}`,
+    ...(opponentPolicy==="bid-aware-v1"?{opponentPolicy}:{}),
     seed,
     topology,
     rulesVersion:PRACTICE_TOPOLOGIES[topology],
@@ -98,6 +105,7 @@ export function practiceView(game,side="A"){
   return {
     mode:"unranked-local",seed:game.seed,round:game.round,
     topology:game.topology,rulesVersion:game.rulesVersion,
+    ...(game.opponentPolicy?{opponentPolicy:game.opponentPolicy}:{}),
     roundCap:game.state.roundCap,
     availableAp:applyCarryover(side==="A"?game.budgetA:game.budgetB).apPool,
     board:game.state.visible.map(c=>({
@@ -188,7 +196,7 @@ export function chooseBotAction(game,side="B"){
   // The defensive bot sometimes holds a close contact instead of blindly
   // mirroring an opponent's movement. This breaks symmetric scout chases,
   // preserves attack opportunities and uses only seat-observed positions.
-  if(side==="B" && opponents.length){
+  if(side==="B" && game.opponentPolicy!=="bid-aware-v1" && opponents.length){
     const nearest=Math.min(...own.flatMap(u=>
       opponents.map(e=>distance(u.position,e.position))));
     if(nearest<=4 && game.round%2===0)return {kind:"pass"};
@@ -342,6 +350,30 @@ export function chooseBotRoundOrders(game,side="B"){
       a.to.q-b.to.q||a.to.r-b.to.r);
   }
   if(candidates.length)result[complement]=candidates[0];
+
+  // Opt-in unranked opponent profile. The legacy scripted house bot always
+  // bids zero and has an asymmetric Red-only holding rule; preserve those
+  // historical results under legacy-v1, but let the new profile compete for
+  // initiative using only the same seat-observed tactical facts as Blue.
+  // No extra moves or attacks are granted by bidding: it buys order only.
+  if(game.opponentPolicy==="bid-aware-v1"){
+    const budget=side==="A"?game.budgetA:game.budgetB;
+    const available=applyCarryover(budget).apPool;
+    const enemy=knownEnemyUnits(game,side);
+    const ownAlive=ownUnits(game,side);
+    if(result.attack){
+      // An imminent exchange is worth protecting with a higher initiative
+      // bid. This never reads a concealed enemy or the opponent's sealed bid.
+      const actor=ownAlive.find(u=>u.id===result.attack.unitId);
+      const contested=actor&&enemy.some(e=>
+        distance(e.position,actor.position)<=(RANGE[e.type]??1));
+      result.bid=Math.min(available,contested?2:1);
+    }else if(result.move && enemy.length){
+      const pressure=ownAlive.some(u=>enemy.some(e=>
+        distance(e.position,u.position)<=3));
+      result.bid=pressure?Math.min(available,1):0;
+    }
+  }
   return result;
 }
 export function advancePractice(game,action){
