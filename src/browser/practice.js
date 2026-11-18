@@ -4,7 +4,7 @@
  */
 const $=id=>document.getElementById(id);
 const el={
-  map:$("battle-map"),ready:$("ready-screen"),start:$("start-battle"),
+  map:$("battle-map"),roster:$("squad-roster"),ready:$("ready-screen"),start:$("start-battle"),
   round:$("round-label"),blue:$("score-blue"),red:$("score-red"),
   selected:$("selected-name"),command:$("command-label"),instruction:$("instruction"),
   notice:$("notice"),event:$("event-label"),commit:$("commit-round"),
@@ -23,6 +23,7 @@ const letters={scout:"S",infantry:"I",heavy:"H"};
 let sequence=0,current=null,selectedId=null,options=[],queued=null,busy=false;
 let orders={move:null,attack:null,bid:0};
 let scene3D=null,using3D=false,threeDLoading=false,threeDFailed=false;
+let rosterSignature="";
 const requests=new Map();
 const worker=new Worker("./practice-worker.mjs",{type:"module"});
 
@@ -151,6 +152,7 @@ function on3DHex(q,r){
   const cell=current.board.find(c=>c.q===q&&c.r===r);
   if(!cell)return;
   const piece=current.units.find(u=>u.q===q&&u.r===r);
+  if(piece?.side==="A"){void selectUnit(piece,true);return;}
   const choice=options.find(a=>a.to.q===q&&a.to.r===r);
   clickCell(cell,piece,choice);
 }
@@ -213,6 +215,48 @@ function labelOrder(choice){
   return unitName+" · "+(choice.kind==="attack"?"Attack":"Move to")+" "+
     (cell?.terrain??"target");
 }
+function renderSquadRoster(){
+  if(!current){el.roster.hidden=true;return;}
+  const own=current.units.filter(u=>u.side==="A").sort((a,b)=>a.id.localeCompare(b.id));
+  const signature=own.map(u=>u.id+":"+u.type+":"+u.hp).join("|");
+  if(signature!==rosterSignature){
+    rosterSignature=signature;
+    el.roster.replaceChildren();
+    const counts={};
+    for(const unit of own){
+      counts[unit.type]=(counts[unit.type]??0)+1;
+      const n=counts[unit.type];
+      const button=document.createElement("button");
+      button.type="button";
+      button.dataset.unitId=unit.id;
+      button.setAttribute("aria-label",
+        "Select Blue "+unit.type+" "+n+", "+unit.hp+" health");
+      const name=document.createElement("span");
+      name.textContent=unit.type.toUpperCase()+" "+n;
+      const health=document.createElement("span");
+      health.className="hp";health.textContent=unit.hp+" HP";
+      button.append(name,health);
+      button.addEventListener("click",()=>{void selectUnit(unit,true);});
+      el.roster.append(button);
+    }
+  }
+  el.roster.hidden=!el.ready.hidden||Boolean(current.ended);
+  for(const button of el.roster.querySelectorAll("button")){
+    button.setAttribute("aria-pressed",String(button.dataset.unitId===selectedId));
+    button.disabled=busy||Boolean(current.ended);
+  }
+}
+function focusSquad(unit){
+  if(using3D){scene3D?.focusHex(unit.q,unit.r);return;}
+  if(!mapCamera.bounds)return;
+  const [x,y]=xy(unit);
+  mapCamera.cx=x;mapCamera.cy=y;
+  // Quick-selection brings an outlying army member into inspectable view.
+  // Direct clicks on board pieces never force a zoom or move the camera.
+  mapCamera.scale=Math.max(mapCamera.scale,window.innerWidth<=860?1.8:1.5);
+  applyMapCamera();
+}
+
 function showOrders(){
   el.plannedMove.textContent=labelOrder(orders.move);
   el.plannedAttack.textContent=labelOrder(orders.attack);
@@ -231,6 +275,7 @@ function updateBusy(value){
   el.clearMove.disabled=busy||!orders.move||!!current?.ended;
   el.clearAttack.disabled=busy||!orders.attack||!!current?.ended;
   el.bidAmount.disabled=busy||!current||!!current.ended;
+  for(const button of el.roster.querySelectorAll("button"))button.disabled=busy||!!current?.ended;
   el.start.disabled=busy;
   el.toggle3D.disabled=busy||!current||threeDLoading||threeDFailed;
 }
@@ -265,6 +310,7 @@ function create(tag,attrs={}){
 }
 function draw(){
   if(!current)return;
+  renderSquadRoster();
   el.map.replaceChildren();
   const points=current.board.map(c=>({cell:c,center:xy(c)}));
   let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
@@ -355,6 +401,7 @@ async function startBattle(){
       seed:"local-"+crypto.randomUUID().slice(0,12),topology,
     });
     current=reply.state;selectedId=null;queued=null;options=[];
+    rosterSignature="";
     orders={move:null,attack:null,bid:0};
     el.bidAmount.value="0";
     el.ready.hidden=true;el.victory.hidden=true;
@@ -370,7 +417,7 @@ async function startBattle(){
   }catch(e){status(String(e?.message||e));}
   finally{updateBusy(false);}
 }
-async function selectUnit(unit){
+async function selectUnit(unit,focus=false){
   if(busy||current?.ended)return;
   updateBusy(true);status("");
   try{
@@ -385,6 +432,7 @@ async function selectUnit(unit){
           unit.attackRange+". Queue either or both free slots."):
       "No valid move or visible attack. Select another squad.";
     draw();sync3D();
+    if(focus)focusSquad(unit);
   }catch(e){status(String(e?.message||e));}
   finally{updateBusy(false);}
 }
@@ -448,7 +496,7 @@ el.changeArena.addEventListener("click",()=>{
   if(busy)return;
   el.victory.hidden=true;
   el.ready.hidden=false;
-  el.threeDTools.hidden=true;
+  el.threeDTools.hidden=true;el.roster.hidden=true;
   el.start.focus();
 });
 el.commit.addEventListener("click",()=>{void advance({...orders});});

@@ -285,6 +285,18 @@ async function verifyPlayablePractice(mobile=false){
   assert(Math.abs(fittedView[2]-initialView[2])<.1,
     "Fit button must restore the entire tactical board");
 
+  const squadButtons=page.locator("#squad-roster button");
+  assert.equal(await squadButtons.count(),5,
+    "Frontier must offer one readable quick-select per friendly squad");
+  await squadButtons.first().click();
+  await page.waitForFunction(()=>document.querySelector('#squad-roster button[aria-pressed="true"]'),
+    undefined,{timeout:15000});
+  const focused=(await page.locator("#battle-map").getAttribute("viewBox")).split(" ").map(Number);
+  assert(focused[2]<initialView[2]*.8,
+    "Quick-select must focus and enlarge a distant squad for human play");
+  assert(await page.locator("#battle-map .cell.selected").count()===1,
+    "Quick-select must highlight one authoritative unit without moving it");
+  await page.locator("#game-3d-reset").click();
   const blue=page.locator('#battle-map .cell[aria-label*="Blue"]').first();
   assert(await blue.count()>0,"No blue unit in practice mode");
   await blue.click();
@@ -382,6 +394,8 @@ async function verifyInteractiveVerdantPractice(mobile=false){
       "Phone squad selector is not located above the battlefield");
     assert(controls.overflow<=2,"3D gameplay causes horizontal phone overflow");
   }
+  assert(await page.locator("#squad-roster").isHidden(),
+    "3D already has a squad tray; duplicate selector must not cover battlefield");
   assert(await page.locator("#battle-map").isHidden(),"2D board overlays active Verdant");
   const c=page.locator("#game-3d");
   const home=Number(await c.getAttribute("data-camera-distance"));

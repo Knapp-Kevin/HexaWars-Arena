@@ -236,6 +236,34 @@
       .game3d-tools button{min-width:44px;min-height:44px}
       footer{display:none}
     }
+
+    .squad-roster{grid-column:1/-1;min-width:0;width:100%;
+      display:flex;align-items:center;gap:6px;overflow-x:auto;overflow-y:hidden;
+      padding:6px;border-radius:11px;border:1px solid #688ba7;
+      background:#091d30ed;scrollbar-width:thin}
+    .squad-roster button{flex:0 0 auto;min-height:46px;min-width:107px;
+      border-radius:8px;padding:5px 11px;text-align:left;font-size:12px;
+      font-weight:800;letter-spacing:.01em;border-color:#7da6ca;background:#1a3d5f}
+    .squad-roster button[aria-pressed="true"]{border-color:#f7d386;
+      background:#375a72;box-shadow:inset 0 0 0 2px #f7d386}
+    .squad-roster button .hp{display:block;color:#c5e2f2;font-size:11px;font-weight:600}
+    .is-3d .squad-roster{display:none!important}
+    @media(max-width:860px){
+      .squad-roster{gap:5px;padding:5px}
+      .squad-roster button{min-height:46px;min-width:96px;padding:5px 8px;font-size:11px}
+    }
+    /* The fixed phone command tray must not cover 2D zoom/fit controls. */
+    @media(max-width:860px){
+      body:not(.is-3d) .game3d-tools{
+        top:48px;bottom:auto;right:7px
+      }
+    }
+    /* The squad selector lives with the commands, never over legal hexes. */
+    @media(max-width:860px){
+      body:not(.match-finished):not(.is-3d) .arena{
+        height:clamp(330px,calc(100dvh - 320px),640px);min-height:330px
+      }
+    }
   </style>
   <script type="module" src="./practice.js"></script>
 </head>
@@ -302,6 +330,7 @@
         <div class="detail" id="instruction">Available moves appear in blue; attacks appear in red.</div>
       </section>
       <section class="panel actionbar" aria-label="Build your round plan">
+        <div id="squad-roster" class="squad-roster" role="group" aria-label="Choose your Blue squad" hidden></div>
         <div class="order-slots">
           <div class="order-slot">
             <div><span class="slot-label">1 FREE MOVE</span><strong id="planned-move">Choose a squad</strong></div>
