@@ -678,7 +678,11 @@ test("Bid-aware 5v5 AI matchup uses real sealed AP bids from both seats without 
   const stats={matches:32,blue:0,red:0,draw:0,roundCaps:0,rounds:0,
     totalBidA:0,totalBidB:0,roundsWithBids:0,moveA:0,moveB:0,attackA:0,attackB:0};
   for(let i=0;i<stats.matches;i++){
-    const game=newPractice("bid-aware-"+String(i).padStart(3,"0"),
+    // Use the SAME initial-board seed as the legacy policy cohort above,
+    // so any seat-balance difference is not merely different terrain or
+    // opening formations. Match IDs (and tie coin-flips) still differ
+    // deliberately across versioned opponent policies.
+    const game=newPractice("matchup-audit-"+String(i).padStart(3,"0"),
       "frontier127","bid-aware-v1");
     while(!game.finished&&game.round<game.state.roundCap){
       const a=chooseBotRoundOrders(game,"A");
