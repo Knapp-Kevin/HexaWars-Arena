@@ -252,6 +252,12 @@
       .squad-roster{gap:5px;padding:5px}
       .squad-roster button{min-height:46px;min-width:96px;padding:5px 8px;font-size:11px}
     }
+    /* The fixed phone command tray must not cover 2D zoom/fit controls. */
+    @media(max-width:860px){
+      body:not(.is-3d) .game3d-tools{
+        top:48px;bottom:auto;right:7px
+      }
+    }
     /* The squad selector lives with the commands, never over legal hexes. */
     @media(max-width:860px){
       body:not(.match-finished):not(.is-3d) .arena{
