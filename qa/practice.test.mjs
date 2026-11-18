@@ -831,3 +831,87 @@ test("Maneuver-v2 bots exercise both move slots without bypassing seat-side comm
     ...tally,meanRounds:Number((tally.rounds/tally.matches).toFixed(2)),
   }));
 });
+
+test("48 paired seeded 5v5 matchups compare one-move and maneuver-v2 human team economics",()=>{
+  const modes=[
+    {name:"classic-v1",economy:"classic-v1"},
+    {name:"maneuver-v2",economy:"maneuver-v2"},
+  ];
+  const totals=Object.fromEntries(modes.map(m=>[m.name,{
+    matches:0,A:0,B:0,draw:0,caps:0,rounds:0,attackEvents:0,
+    moveEvents:0,declaredMove1:0,declaredMove2:0,declaredAttacks:0,
+    bidAP:{A:0,B:0},firstAttackRoundTotal:0,firstAttackObserved:0,
+    squadsEverActed:0,startingSquads:0,zeroActionSquads:0,
+  }]));
+  for(let i=0;i<48;i++){
+    const seed="economy-paired-"+String(i).padStart(3,"0");
+    const classic=newPractice(seed,"frontier127","bid-aware-v1","classic-v1");
+    const maneuver=newPractice(seed,"frontier127","bid-aware-v1","maneuver-v2");
+    assert.deepEqual(classic.state,maneuver.state,
+      "Pairing MUST compare the identical map, unit placement, HP and fog state");
+    assert.deepEqual(classic.budgetA,maneuver.budgetA);
+    assert.deepEqual(classic.budgetB,maneuver.budgetB);
+    assert.notEqual(classic.matchId,maneuver.matchId,
+      "Offline cohort cannot overwrite immutable replay rule identities");
+
+    for(const [mode,game] of [[modes[0].name,classic],[modes[1].name,maneuver]]){
+      const metric=totals[mode];
+      metric.matches++;
+      const acted=new Set();
+      metric.startingSquads+=game.state.units.length;
+      let firstAttack=null;
+      while(!game.finished&&game.round<game.state.roundCap){
+        const ordersA=chooseBotRoundOrders(game,"A");
+        const ordersB=chooseBotRoundOrders(game,"B");
+        assert(validatePracticeOrders(game,"A",ordersA).valid);
+        assert(validatePracticeOrders(game,"B",ordersB).valid);
+        for(const [side,orders] of [["A",ordersA],["B",ordersB]]){
+          if(orders.move){metric.declaredMove1++;acted.add(orders.move.unitId);}
+          if(orders.move2){metric.declaredMove2++;acted.add(orders.move2.unitId);}
+          if(orders.attack){metric.declaredAttacks++;acted.add(orders.attack.unitId);}
+          metric.bidAP[side]+=orders.bid;
+          if(orders.move2){
+            assert.equal(game.economy,"maneuver-v2",
+              "Historical economy must not acquire a hidden second activation");
+            assert.notEqual(orders.move?.unitId,orders.move2.unitId);
+          }
+        }
+        const result=advancePractice(game,ordersA);
+        assert.equal(result.bidA,ordersA.bid);
+        assert.equal(result.bidB,ordersB.bid);
+        const moves=result.events.filter(x=>x==="unit_moved").length;
+        const attacks=result.events.filter(x=>x==="unit_attacked").length;
+        assert(moves<=(game.economy==="maneuver-v2"?4:2),
+          "Action slot cap or resolver wave violated");
+        assert(attacks<=2,
+          "Both seats collectively get only one free attack each");
+        metric.moveEvents+=moves;
+        metric.attackEvents+=attacks;
+        if(attacks&&firstAttack===null)firstAttack=game.round;
+      }
+      assert(game.finished,"The paired match must reach an actual terminal outcome");
+      metric[game.finished.winner]++;
+      metric.rounds+=game.round;
+      if(game.round===game.state.roundCap)metric.caps++;
+      metric.squadsEverActed+=acted.size;
+      metric.zeroActionSquads+=10-acted.size;
+      if(firstAttack!==null){
+        metric.firstAttackRoundTotal+=firstAttack;metric.firstAttackObserved++;
+      }
+    }
+  }
+  const summary=Object.fromEntries(Object.entries(totals).map(([name,m])=>
+    [name,{...m,
+      meanRounds:Number((m.rounds/m.matches).toFixed(2)),
+      meanActedSquads:Number((m.squadsEverActed/m.matches).toFixed(2)),
+      meanFirstCombatRound:m.firstAttackObserved
+        ?Number((m.firstAttackRoundTotal/m.firstAttackObserved).toFixed(2)):null,
+    }]));
+  assert(summary["maneuver-v2"].declaredMove2>0,
+    "The experiment must actually exercise its changed action economy");
+  assert(summary["classic-v1"].declaredMove2===0);
+  assert(summary["classic-v1"].attackEvents>0&&summary["maneuver-v2"].attackEvents>0);
+  // No ungrounded 'fairness PASS' threshold here: the opponent's policies
+  // and versioned match IDs produce different deterministic tie-breaks.
+  console.log("FRONTIER_ECONOMY_PAIRED_48",JSON.stringify(summary));
+});
