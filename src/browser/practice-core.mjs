@@ -52,7 +52,11 @@ export function newPractice(seed="practice-alpha-01",topology="legacy81"){
   placeStartingUnits(board,encodedSeed);
   const visible=board.flat();
   return {
-    matchId:`practice:${PRACTICE_TOPOLOGIES[topology]}:${seed}`,
+    // Preserve exact legacy match IDs so seeded historical practice traces
+    // remain replayable under their original rules, without reinterpretation.
+    matchId:topology==="legacy81"
+      ?`practice:${seed}`
+      :`practice:${PRACTICE_TOPOLOGIES[topology]}:${seed}`,
     seed,
     topology,
     rulesVersion:PRACTICE_TOPOLOGIES[topology],
