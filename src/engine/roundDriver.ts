@@ -68,17 +68,22 @@ export function runRound(input: RunRoundInput): RunRoundResult {
   const firstAgent = order.first;
   const firstPlan = firstAgent === "A" ? input.planA : input.planB;
   const firstStart = firstAgent === "A" ? startA : startB;
-  const firstOut = runAgent(firstAgent, firstPlan, stateAfterReserve, firstStart);
-
   const secondAgent: "A" | "B" = firstAgent === "A" ? "B" : "A";
   const secondPlan = firstAgent === "A" ? input.planB : input.planA;
   const secondStart = firstAgent === "A" ? startB : startA;
-  const secondOut = runAgent(secondAgent, secondPlan, firstOut.state, secondStart);
+
+  // Plan D round phases are global. Initiative establishes the order INSIDE
+  // each phase, not permission to attack before the opponent's free move.
+  // Resolve both moves first, then both free actions, then AP extras.
+  const firstMove = runAgentPhase(firstAgent, firstPlan, stateAfterReserve, firstStart, "move");
+  const secondMove = runAgentPhase(secondAgent, secondPlan, firstMove.state, secondStart, "move");
+  const firstAction = runAgentPhase(firstAgent, firstPlan, secondMove.state, firstMove.budget, "action");
+  const secondAction = runAgentPhase(secondAgent, secondPlan, firstAction.state, secondMove.budget, "action");
 
   // Phase 4 AP extras: winner's extras first, then loser, preserving declared order.
   const boostFlag: Record<string, { mode: "range" | "damage" } | undefined> = {};
   const extrasCtx: import("./round-resolver/extras.ts").ExtrasContext = {
-    state: secondOut.state,
+    state: secondAction.state,
     round: input.round,
     bidWinner: order.first,
     boostFlag,
@@ -88,21 +93,23 @@ export function runRound(input: RunRoundInput): RunRoundResult {
   };
   resolveExtras(extrasCtx);
 
-  const budgetAPre = firstAgent === "A" ? firstOut.budget : secondOut.budget;
-  const budgetBPre = firstAgent === "A" ? secondOut.budget : firstOut.budget;
+  const budgetAPre = firstAgent === "A" ? firstAction.budget : secondAction.budget;
+  const budgetBPre = firstAgent === "A" ? secondAction.budget : firstAction.budget;
   const budgetA = applyEndOfRound(budgetAPre);
   const budgetB = applyEndOfRound(budgetBPre);
 
   const refundEvents = buildRefundEvents(input.budgetA, budgetA, input.budgetB, budgetB, input.round);
   const events = [
     ...reserveEvents,
-    ...firstOut.events,
-    ...secondOut.events,
+    ...firstMove.events,
+    ...secondMove.events,
+    ...firstAction.events,
+    ...secondAction.events,
     ...extrasCtx.events,
     ...refundEvents,
   ];
 
-  const nextState: MatchState = { ...secondOut.state, turn: input.round + 1 };
+  const nextState: MatchState = { ...secondAction.state, turn: input.round + 1 };
   const victory = checkVictory(nextState);
   return {
     events,
@@ -113,11 +120,12 @@ export function runRound(input: RunRoundInput): RunRoundResult {
   };
 }
 
-function runAgent(
+function runAgentPhase(
   agent: "A" | "B",
   plan: RoundPlan,
   state: MatchState,
   budget: AgentRoundBudget,
+  phase: "move" | "action",
 ): AgentOutcome {
   const events: EngineEvent[] = [];
   let nextState = state;
@@ -128,14 +136,14 @@ function runAgent(
   const skipDead = (unitId: string) =>
     nextState.units.find((u) => u.id === unitId && u.hp <= 0) !== undefined;
 
-  if (plan.freeMove && !skipDead(plan.freeMove.unitId)) {
+  if (phase === "move" && plan.freeMove && !skipDead(plan.freeMove.unitId)) {
     const moveOut = doMove(agent, plan.freeMove.unitId, plan.freeMove.to, nextState);
     if (moveOut) {
       nextState = moveOut.state;
       events.push(moveOut.event);
       nextBudget = { ...nextBudget, freeMove: Math.max(0, nextBudget.freeMove - 1) };
     }
-  } else if (plan.freeMove && skipDead(plan.freeMove.unitId)) {
+  } else if (phase === "move" && plan.freeMove && skipDead(plan.freeMove.unitId)) {
     events.push({
       type: "wasted_action",
       payload: { agent, kind: "freeMove", originalUnitId: plan.freeMove.unitId, reason: "trigger_killed_unit" },
@@ -143,14 +151,14 @@ function runAgent(
     });
   }
 
-  if (plan.freeAction && !skipDead(plan.freeAction.unitId) && plan.freeAction.type === "attack") {
+  if (phase === "action" && plan.freeAction && !skipDead(plan.freeAction.unitId) && plan.freeAction.type === "attack") {
     const atkOut = doAttack(agent, plan.freeAction.unitId, plan.freeAction.to, nextState);
     if (atkOut) {
       nextState = atkOut.state;
       events.push(...atkOut.events);
       nextBudget = { ...nextBudget, freeAction: Math.max(0, nextBudget.freeAction - 1) };
     }
-  } else if (plan.freeAction && skipDead(plan.freeAction.unitId)) {
+  } else if (phase === "action" && plan.freeAction && skipDead(plan.freeAction.unitId)) {
     events.push({
       type: "wasted_action",
       payload: { agent, kind: "freeAction", originalUnitId: plan.freeAction.unitId, reason: "trigger_killed_unit" },
