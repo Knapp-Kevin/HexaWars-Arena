@@ -618,3 +618,97 @@ test("PVP economy observability: paired 5v5 house-bot baseline logs seat actions
     activatedSquadIds:{A:stats.unitActivation.A.size,B:stats.unitActivation.B.size},
   }));
 });
+
+test("Versioned bid-aware Frontier opponent preserves historical practice identities and seat fairness",()=>{
+  const seed="bot-version-check";
+  const old=newPractice(seed,"frontier127");
+  const current=newPractice(seed,"frontier127","bid-aware-v1");
+  assert.equal(old.matchId,"practice:hexawars-frontier127-v1:"+seed);
+  assert.equal(current.matchId,"practice:hexawars-frontier127-v1:bot-bid-aware-v1:"+seed);
+  assert.notEqual(current.matchId,old.matchId);
+  assert.deepEqual(current.state,old.state,"Policy upgrade must not change terrain or initial armies");
+  assert.equal(current.rulesVersion,old.rulesVersion,
+    "The opponent policy changes, not the authoritative combat rules");
+  assert.equal(practiceView(current,"A").opponentPolicy,"bid-aware-v1");
+  assert.equal(practiceView(old,"A").opponentPolicy,undefined);
+  assert.throws(()=>newPractice(seed,"balanced61","bid-aware-v1"),/Unsupported opponent policy/);
+  assert.throws(()=>newPractice(seed,"frontier127","unknown"),/Unsupported opponent policy/);
+
+  function setupContact(game,range){
+    const a=game.state.units.find(u=>u.owner==="A");
+    const b=game.state.units.find(u=>u.owner==="B");
+    const units=[
+      {...a,type:"scout",hp:3,strength:2,weight:1,
+        position:{q:-range,r:0,s:range}},
+      {...b,type:"scout",hp:3,strength:2,weight:1,
+        position:{q:0,r:0,s:0}},
+    ];
+    game.state.units=units;
+    game.state.visible=game.state.visible.map(cell=>({
+      ...cell,terrain:"plain",unit:units.find(u=>
+        u.position.q===cell.position.q&&u.position.r===cell.position.r),
+    }));
+  }
+  setupContact(old,2);
+  setupContact(current,2);
+  // The old scripted bot holds with nearby enemies on even rounds if Red.
+  assert.equal(chooseBotAction(old,"B").kind,"pass");
+  assert.equal(chooseBotAction(current,"A").kind,"move");
+  assert.equal(chooseBotAction(current,"B").kind,"move",
+    "Bid-aware Red may not receive a special side-only hold rule");
+  const approachA=chooseBotRoundOrders(current,"A");
+  const approachB=chooseBotRoundOrders(current,"B");
+  assert.equal(approachA.bid,1);
+  assert.equal(approachB.bid,1);
+  assert(validatePracticeOrders(current,"A",approachA).valid);
+  assert(validatePracticeOrders(current,"B",approachB).valid);
+
+  // At immediate contact, both seats can bid 2 to protect an exchange.
+  setupContact(current,1);
+  const attackA=chooseBotRoundOrders(current,"A");
+  const attackB=chooseBotRoundOrders(current,"B");
+  assert(attackA.attack&&attackB.attack);
+  assert.equal(attackA.bid,2);
+  assert.equal(attackB.bid,2);
+  assert(validatePracticeOrders(current,"A",attackA).valid);
+  assert(validatePracticeOrders(current,"B",attackB).valid);
+});
+
+test("Bid-aware 5v5 AI matchup uses real sealed AP bids from both seats without off-budget orders",()=>{
+  const stats={matches:32,blue:0,red:0,draw:0,roundCaps:0,rounds:0,
+    totalBidA:0,totalBidB:0,roundsWithBids:0,moveA:0,moveB:0,attackA:0,attackB:0};
+  for(let i=0;i<stats.matches;i++){
+    const game=newPractice("bid-aware-"+String(i).padStart(3,"0"),
+      "frontier127","bid-aware-v1");
+    while(!game.finished&&game.round<game.state.roundCap){
+      const a=chooseBotRoundOrders(game,"A");
+      const b=chooseBotRoundOrders(game,"B");
+      assert(validatePracticeOrders(game,"A",a).valid);
+      assert(validatePracticeOrders(game,"B",b).valid);
+      assert(a.bid<=practiceView(game,"A").availableAp);
+      assert(b.bid<=practiceView(game,"B").availableAp);
+      stats.totalBidA+=a.bid;stats.totalBidB+=b.bid;
+      if(a.bid>0||b.bid>0)stats.roundsWithBids++;
+      if(a.move)stats.moveA++;if(b.move)stats.moveB++;
+      if(a.attack)stats.attackA++;if(b.attack)stats.attackB++;
+      const out=advancePractice(game,a);
+      assert.equal(out.bidA,a.bid);
+      assert.equal(out.bidB,b.bid);
+      assert(game.budgetA.apCarry>=0&&game.budgetA.apCarry<=1);
+      assert(game.budgetB.apCarry>=0&&game.budgetB.apCarry<=1);
+      assert(game.state.units.every(u=>u.hp>=0));
+    }
+    assert(game.finished);
+    if(game.finished.winner==="A")stats.blue++;
+    else if(game.finished.winner==="B")stats.red++;
+    else stats.draw++;
+    if(game.round===game.state.roundCap)stats.roundCaps++;
+    stats.rounds+=game.round;
+  }
+  assert(stats.totalBidA>0 && stats.totalBidB>0,
+    "Equal initiative access must be exercised by both bots");
+  assert(stats.moveA>0&&stats.moveB>0&&stats.attackA>0&&stats.attackB>0);
+  console.log("BID_AWARE_MATCHUP_BASELINE",JSON.stringify({
+    ...stats,meanRounds:Number((stats.rounds/stats.matches).toFixed(2)),
+  }));
+});
