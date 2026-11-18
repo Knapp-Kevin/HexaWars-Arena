@@ -8,8 +8,9 @@ import { practiceScene, projectWorldToScreen } from "../src/browser/practice-3d.
 import { resolveCombat } from "../src/engine/combat.ts";
 import { checkVictory } from "../src/engine/victory.ts";
 import { validateRoundPlan } from "../dist/pages/rules/gateway/validator.js";
-import { runRound } from "../dist/pages/rules/engine/roundDriver.js";
+import { runRound,runFrontierRound } from "../dist/pages/rules/engine/roundDriver.js";
 import { newBudget } from "../dist/pages/rules/engine/round-state.js";
+import { validateFrontierRoundPlan } from "../dist/pages/rules/gateway/frontier-round-validator.js";
 import {
   newPractice,practiceView,legalCommands,chooseBotAction,
   chooseBotRoundOrders,validatePracticeOrders,
@@ -714,5 +715,119 @@ test("Bid-aware 5v5 AI matchup uses real sealed AP bids from both seats without 
   assert(stats.moveA>0&&stats.moveB>0&&stats.attackA>0&&stats.attackB>0);
   console.log("BID_AWARE_MATCHUP_BASELINE",JSON.stringify({
     ...stats,meanRounds:Number((stats.rounds/stats.matches).toFixed(2)),
+  }));
+});
+
+test("Maneuver-v2 has a separate match/rules identity and does not reinterpret legacy Frontier replays",()=>{
+  const seed="maneuver-versioned-001";
+  const a=newPractice(seed,"frontier127","bid-aware-v1");
+  const b=newPractice(seed,"frontier127","bid-aware-v1","maneuver-v2");
+  assert.notEqual(a.matchId,b.matchId);
+  assert.equal(a.rulesVersion,"hexawars-frontier127-v1");
+  assert.equal(b.rulesVersion,"hexawars-frontier127-maneuver-v2");
+  assert.equal(practiceView(b).maxMoves,2);
+  assert.equal(practiceView(a).maxMoves,undefined);
+  assert.deepEqual(a.state,b.state,"Changing action economy must not alter terrain or starting units");
+  assert.deepEqual(a.budgetA,b.budgetA);
+  assert.throws(()=>newPractice(seed,"legacy81","legacy-v1","maneuver-v2"),
+    /Unsupported economy/);
+  assert.throws(()=>newPractice(seed,"frontier127","bid-aware-v1","bad-economy"),
+    /Unsupported economy/);
+});
+
+test("Maneuver-v2 accepts exactly two different owned squad moves and rejects duplicated, forged or extra-slot orders",()=>{
+  const game=newPractice("maneuver-two-squad","frontier127","bid-aware-v1","maneuver-v2");
+  const units=game.state.units.filter(u=>u.owner==="A");
+  const moves=units.flatMap(u=>legalCommands(game,"A",u.id).filter(c=>c.kind==="move"));
+  const move=moves[0];
+  const move2=moves.find(c=>c.unitId!==move.unitId&&
+    !(c.to.q===move.to.q&&c.to.r===move.to.r));
+  assert(move&&move2,"Two different squads need a legal starting move");
+  const planOrders={move,move2,bid:2};
+  const start=structuredClone(game);
+  assert.deepEqual(validatePracticeOrders(game,"A",planOrders),
+    {valid:true,availableAp:3});
+  assert.deepEqual(game,start,"Staged two-unit validation must be pure");
+  assert.throws(()=>validatePracticeOrders(game,"A",{
+    move,move2:{...move2,unitId:move.unitId},bid:2,
+  }),/not legal|frontier_duplicate/);
+  assert.throws(()=>validatePracticeOrders(game,"A",{
+    move,move2:{...move2,to:move.to},bid:2,
+  }),/not legal|frontier_duplicate/);
+  assert.throws(()=>validatePracticeOrders(game,"A",{
+    move,move2:{...move2,to:{q:90,r:0,s:-90}},bid:2,
+  }),/not legal/);
+  assert.throws(()=>validatePracticeOrders(game,"A",{
+    move,move2,bid:4,
+  }),/Initiative bid/);
+  const result=advancePractice(game,planOrders);
+  assert.equal(result.playerAction,"move+move2");
+  assert.equal(result.bidA,2);
+  assert.equal(game.history[0].playerMove2.unitId,move2.unitId);
+  assert.equal(game.history[0].playerMove.unitId,move.unitId);
+  assert.equal(game.round,1);
+});
+
+test("Maneuver-v2 staged second-move attack preview is canonical and fog-safe",()=>{
+  const game=newPractice("maneuver-stage-scout","frontier127","bid-aware-v1","maneuver-v2");
+  const at=(q,r)=>({q,r,s:-q-r});
+  const one={id:"a-first",owner:"A",type:"heavy",weight:3,
+    position:at(-2,2),hp:8,strength:5};
+  const two={id:"a-second",owner:"A",type:"scout",weight:1,
+    position:at(0,0),hp:3,strength:2};
+  const spotter={id:"a-spotter",owner:"A",type:"infantry",weight:2,
+    position:at(4,-1),hp:5,strength:3};
+  const enemy={id:"b-target",owner:"B",type:"infantry",weight:2,
+    position:at(4,0),hp:5,strength:3};
+  game.state.units=[one,two,spotter,enemy];
+  game.state.visible=game.state.visible.map(c=>({...c,terrain:"plain",
+    unit:game.state.units.find(u=>u.position.q===c.position.q&&u.position.r===c.position.r)}));
+  const move={kind:"move",unitId:one.id,to:at(-1,2)};
+  const move2={kind:"move",unitId:two.id,to:at(3,0)};
+  const attack={kind:"attack",unitId:two.id,to:at(4,0)};
+  const before=structuredClone(game);
+  assert(!legalCommands(game,"A",two.id).some(o=>o.kind==="attack"&&o.to.q===4));
+  assert(legalCommands(game,"A",two.id,move2).some(o=>
+    o.kind==="attack"&&o.to.q===4));
+  assert(validatePracticeOrders(game,"A",{move,move2,attack,bid:1}).valid);
+  assert.deepEqual(game,before);
+  game.state.units=game.state.units.filter(u=>u.id!=="a-spotter");
+  assert(!legalCommands(game,"A",two.id,move2).some(o=>
+    o.kind==="attack"&&o.to.q===4),
+    "Future move cannot retroactively reveal hidden targets");
+  assert.throws(()=>validatePracticeOrders(game,"A",{move,move2,attack,bid:1}),
+    /not legal/);
+});
+
+test("Maneuver-v2 bots exercise both move slots without bypassing seat-side command validation",()=>{
+  const tally={matches:24,wins:{A:0,B:0,draw:0},rounds:0,
+    movesA:0,movesB:0,secondA:0,secondB:0,attacks:0,bidsA:0,bidsB:0,caps:0};
+  for(let i=0;i<tally.matches;i++){
+    const game=newPractice("maneuver-cohort-"+String(i).padStart(3,"0"),
+      "frontier127","bid-aware-v1","maneuver-v2");
+    while(!game.finished&&game.round<game.state.roundCap){
+      const a=chooseBotRoundOrders(game,"A");
+      const b=chooseBotRoundOrders(game,"B");
+      assert(validatePracticeOrders(game,"A",a).valid);
+      assert(validatePracticeOrders(game,"B",b).valid);
+      if(a.move)tally.movesA++;if(b.move)tally.movesB++;
+      if(a.move2)tally.secondA++;if(b.move2)tally.secondB++;
+      assert(!a.move2||a.move?.unitId!==a.move2.unitId);
+      assert(!b.move2||b.move?.unitId!==b.move2.unitId);
+      tally.bidsA+=a.bid;tally.bidsB+=b.bid;
+      const step=advancePractice(game,a);
+      tally.attacks+=step.events.filter(e=>e==="unit_attacked").length;
+      assert(step.events.filter(e=>e==="unit_moved").length<=4);
+    }
+    assert(game.finished);
+    tally.rounds+=game.round;
+    tally.wins[game.finished.winner]++;
+    if(game.round===game.state.roundCap)tally.caps++;
+  }
+  assert(tally.secondA>0&&tally.secondB>0,"Both sides must actually exercise second moves");
+  assert(tally.bidsA>0&&tally.bidsB>0);
+  assert(tally.attacks>0);
+  console.log("MANEUVER_V2_COHORT",JSON.stringify({
+    ...tally,meanRounds:Number((tally.rounds/tally.matches).toFixed(2)),
   }));
 });

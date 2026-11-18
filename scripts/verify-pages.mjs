@@ -27,7 +27,8 @@ for (const filename of files) {
 const required = [
   "index.html", "arena.html", "verdant.html", "practice.html", "practice.js",
   "practice-worker.mjs", "practice-core.mjs", "practice-3d.mjs", "rules/engine/roundDriver.js",
-  "rules/gateway/validator.js", "rules/gateway/observation.js", "arena.js",
+  "rules/gateway/validator.js", "rules/gateway/frontier-round-validator.js",
+  "rules/gateway/observation.js", "arena.js",
   "verdant.js", "scene-renderer.mjs", "battlefield-geometry.mjs", "replay-motion.mjs", "demo-replay.js", "public-match.js",
   ".nojekyll", "arena.css", "arena-core.css", "arena-shell.css",
   "arena-board.css", "arena-dialog.css", "LICENSE-MIT.txt",
@@ -76,8 +77,12 @@ assert(practice3D.includes('"./scene-renderer.mjs"'),
   "Live gameplay 3D still references an unavailable or unapproved renderer");
 
 assert(practiceWorker.includes('advancePractice'),"Gameplay Worker lacks canonical round execution");
-assert(practiceCore.includes('runRound(') && practiceCore.includes('validateRoundPlan('),
-  "Practice must use the canonical authoritative rules and plan validator");
+assert(practiceCore.includes('runFrontierRound') &&
+  practiceCore.includes('runRound') &&
+  practiceCore.includes('validateFrontierRoundPlan') &&
+  practiceCore.includes('validateRoundPlan(') &&
+  practiceCore.includes('resolve({'),
+  "Practice must route every versioned command through the shared authoritative engine and strict plan validators");
 for (const f of files.filter(x=>x.startsWith("rules/")&&x.endsWith(".js"))) {
   const text=readFileSync(join(dir,f),"utf8");
   assert(!/\b(?:bun:|node:|process\.|require\s*\()/.test(text),

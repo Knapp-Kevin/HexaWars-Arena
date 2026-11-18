@@ -1,18 +1,19 @@
 import {newPractice,practiceView,legalCommands,advancePractice,validatePracticeOrders} from "./practice-core.mjs";
 let session=null;
 self.onmessage=(message)=>{
-  const {id,type,seed,topology,opponentPolicy,unitId,action,orders}=message.data??{};
+  const {id,type,seed,topology,opponentPolicy,economy,unitId,action,orders}=message.data??{};
   if(!Number.isSafeInteger(id))return;
   try{
     if(type==="START"){
-      session=newPractice(seed,topology??"frontier127",opponentPolicy??"legacy-v1");
+      session=newPractice(seed,topology??"frontier127",opponentPolicy??"legacy-v1",economy??"classic-v1");
       self.postMessage({id,ok:true,state:practiceView(session)});
       return;
     }
     if(!session)throw new Error("Start a battle first");
     if(type==="SELECT"){
       self.postMessage({id,ok:true,
-        legal:legalCommands(session,"A",unitId,orders?.move??null),
+        legal:legalCommands(session,"A",unitId,
+          orders?.move2?.unitId===unitId?orders.move2:orders?.move??null),
         state:practiceView(session)});
       return;
     }

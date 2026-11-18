@@ -252,6 +252,10 @@ async function verifyPlayablePractice(mobile=false){
     undefined,{timeout:30000});
   assert.equal((await page.locator('input[value="frontier127"]').isChecked()),true,
     "The human default should be the larger Frontier board");
+  assert.equal(await page.locator('input[name="command-economy"][value="maneuver-v2"]').isChecked(),
+    true,"Default Frontier should visibly offer the new, unranked two-move rules");
+  assert(await page.locator("#move-two-slot").isVisible(),
+    "The human must see two move slots, not just a v2 label");
   const symmetry=await page.locator("#battle-map .cell").evaluateAll(nodes=>{
     const coords=new Set(nodes.map(n=>n.dataset.q+","+n.dataset.r));
     return nodes.every(n=>coords.has(String(-Number(n.dataset.q))+","+String(-Number(n.dataset.r))));
@@ -311,6 +315,36 @@ async function verifyPlayablePractice(mobile=false){
   await page.waitForFunction(()=>!document.querySelector("#commit-round")?.disabled,
     undefined,{timeout:15000});
   assert(await page.locator("#commit-round").isEnabled(),"Cannot submit chosen legal order");
+  if(!firstIsAttack){
+    const firstUnit=await squadButtons.first().getAttribute("data-unit-id");
+    const alternate=page.locator("#squad-roster button").filter({hasNotText:"never"});
+    let chosen=null;
+    for(let index=0;index<await alternate.count();index++){
+      const button=alternate.nth(index);
+      if((await button.getAttribute("data-unit-id"))!==firstUnit){
+        chosen=button;break;
+      }
+    }
+    assert(chosen,"Need a distinct second squad for 5v5 free movement");
+    await chosen.click();
+    await page.waitForFunction(()=>
+      document.querySelectorAll("#battle-map .cell.available").length>0,
+      undefined,{timeout:15000});
+    await page.locator("#battle-map .cell.available").first().click();
+    await page.waitForFunction(()=>!document.querySelector("#clear-move2")?.disabled,
+      undefined,{timeout:15000});
+    assert(await page.locator("#move-two-slot").isVisible());
+    assert.notEqual((await page.locator("#planned-move2").innerText()).trim(),"Not set",
+      "Second squad must be visibly queued in a separate order slot");
+    await page.locator("#clear-move2").click();
+    await page.waitForFunction(()=>(
+      document.querySelector("#planned-move2")?.textContent?.trim()==="Not set" &&
+      document.querySelector("#clear-move2")?.disabled===true &&
+      document.querySelector("#commit-round")?.disabled===false
+    ),undefined,{timeout:15000});
+    assert(await page.locator("#commit-round").isEnabled(),
+      "Clearing move 2 must retain the first legal squad move");
+  }
   const clear=page.locator(firstIsAttack?"#clear-attack":"#clear-move");
   assert(await clear.isEnabled(),"Queued action is not individually reversible");
   await clear.click();
@@ -456,6 +490,8 @@ async function verifyOriginalLegacyArena(){
     undefined,{timeout:30000});
   assert((await page.locator("#event-label").innerText()).includes("Classic Arena"),
     "Historical map is not explicitly labeled");
+  assert(await page.locator("#move-two-slot").isHidden(),
+    "Legacy 81-cell match must retain frozen one-move rules despite v2 menu default");
   await page.locator("#skip-round").click();
   await page.waitForFunction(()=>
     document.querySelector("#round-label")?.textContent?.includes("ROUND 2"),

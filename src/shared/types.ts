@@ -115,6 +115,20 @@ export interface RoundPlan {
   extras: ExtraEntry[];
 }
 
+/**
+ * Frontier maneuver economy v2 ONLY. The frozen RoundPlan above is unchanged.
+ * Two different living squads may move, once each, in two initiative-ordered
+ * global movement waves before either side's free attack.
+ */
+export interface FrontierRoundPlan extends RoundPlan {
+  secondMove?: FreeMovePlan;
+}
+
+export interface FrontierRunRoundInput extends Omit<RunRoundInput, "planA" | "planB"> {
+  planA: FrontierRoundPlan;
+  planB: FrontierRoundPlan;
+}
+
 export interface BidRecord {
   round: number;
   bidA: number;
