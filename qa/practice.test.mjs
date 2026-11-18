@@ -125,8 +125,10 @@ test("mutual-lethal defender wins with positive health and is not a zombie",()=>
   assert.equal(combat.attackerHp,0);
   assert.equal(combat.defenderHp,1);
 });
-test("canonical dead-unit stalemate seed terminates before the 50-round cap",()=>{
-  const game=newPractice("practice-alpha-01");
+test("canonical zero-HP elimination fixture terminates before the 50-round cap",()=>{
+  // The original practice-alpha-01 fixture now exposes a separate bot loop;
+  // test-seed-02 specifically exercises the zero-HP victory correction.
+  const game=newPractice("test-seed-02");
   while(!game.finished&&game.round<50){
     advancePractice(game,chooseBotAction(game,"A"));
   }
