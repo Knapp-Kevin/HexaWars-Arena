@@ -207,7 +207,7 @@ test("bot policy is pure, bounded, seat-valid and does not attack unseen units",
 });
 test("200-seed deterministic bot cohort avoids reverse-movement deadlocks",()=>{
   const stats={matches:200,cap:0,reversals:0,rounds:0,attacks:0,moves:0,passPairs:0};
-  const worst=[];
+  const worst=[],reversalEvidence=[];
   for(let i=0;i<200;i++){
     const seed="cohort-"+String(i).padStart(3,"0");
     const game=newPractice(seed);
@@ -235,6 +235,10 @@ test("200-seed deterministic bot cohort avoids reverse-movement deadlocks",()=>{
         if(last[side]&&last[side].unitId===action.unitId &&
           last[side].from===to&&last[side].to===from){
           stats.reversals++;
+          if(reversalEvidence.length<8)reversalEvidence.push({
+            seed,round:game.round,side,unitId:action.unitId,
+            previous:last[side],from,to,
+          });
         }
         last[side]={unitId:action.unitId,from,to};
       }
@@ -249,7 +253,8 @@ test("200-seed deterministic bot cohort avoids reverse-movement deadlocks",()=>{
     }
     stats.rounds+=game.round;
   }
-  assert.equal(stats.reversals,0,"An immediate two-hex reversal recurred");
+  assert.equal(stats.reversals,0,
+    "An immediate two-hex reversal recurred: "+JSON.stringify(reversalEvidence));
   assert(stats.cap<=20,`Too many full-length stalemates: ${stats.cap}`);
   assert(stats.moves>0&&stats.attacks>0,"Bot cohort never exercised gameplay");
   assert(stats.passPairs<=10,"Both sides repeatedly passed instead of fighting");
