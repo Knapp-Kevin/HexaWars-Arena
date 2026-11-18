@@ -39,6 +39,9 @@ export function resolveCombat(
 
   // Tie rule: when both combatants would be destroyed, defender wins
   if (defHpAfter === 0 && atkHpAfter === 0) {
+    // Frozen tie rule: the defender wins a mutual-lethal exchange.
+    // A defender with 0 HP is not actually alive, so preserve them at
+    // minimum positive HP. Otherwise elimination checks see a zombie.
     destroyed.push(attacker.id);
   } else {
     if (defHpAfter === 0) destroyed.push(defender.id);
@@ -47,7 +50,7 @@ export function resolveCombat(
 
   return {
     attackerHp: atkHpAfter,
-    defenderHp: defHpAfter,
+    defenderHp: defHpAfter === 0 && atkHpAfter === 0 ? 1 : defHpAfter,
     destroyed,
   };
 }
