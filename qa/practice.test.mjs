@@ -9,6 +9,7 @@ import { resolveCombat } from "../src/engine/combat.ts";
 import { checkVictory } from "../src/engine/victory.ts";
 import { validateRoundPlan } from "../dist/pages/rules/gateway/validator.js";
 import { runRound,runFrontierRound } from "../dist/pages/rules/engine/roundDriver.js";
+import { resolveBids } from "../dist/pages/rules/engine/bidResolver.js";
 import { newBudget } from "../dist/pages/rules/engine/round-state.js";
 import { validateFrontierRoundPlan } from "../dist/pages/rules/gateway/frontier-round-validator.js";
 import {
@@ -914,4 +915,124 @@ test("48 paired seeded 5v5 matchups compare one-move and maneuver-v2 human team 
   // No ungrounded 'fairness PASS' threshold here: the opponent's policies
   // and versioned match IDs produce different deterministic tie-breaks.
   console.log("FRONTIER_ECONOMY_PAIRED_48",JSON.stringify(summary));
+});
+
+/**
+ * Audit control: keep the EXACT same board seed, match ID (including
+ * deterministic initiative tie coin), rules and bot policy, but exchange the
+ * armies' seat identities. Unlike a second match with a new ID, this does not
+ * accidentally randomize the initiative tie-break while measuring seat bias.
+ * These states are intentionally ephemeral and NEVER persisted as replay IDs.
+ */
+function seatSwappedAuditCopy(game){
+  const opposite=side=>side==="A"?"B":"A";
+  const swapped=structuredClone(game);
+  swapped.state.units=game.state.units.map(unit=>({
+    ...unit,
+    owner:opposite(unit.owner),
+    id:unit.id.replace(/^frontier-([AB])-/,(_,side)=>
+      "frontier-"+opposite(side)+"-"),
+  }));
+  const byCoord=new Map(swapped.state.units.map(unit=>[
+    unit.position.q+","+unit.position.r,unit,
+  ]));
+  swapped.state.visible=game.state.visible.map(cell=>({
+    ...cell,
+    unit:byCoord.get(cell.position.q+","+cell.position.r),
+  }));
+  return swapped;
+}
+
+test("32 controlled seat swaps isolate initiative from physical-start bias in both 5v5 economies",()=>{
+  const modes=["classic-v1","maneuver-v2"];
+  const result={};
+  for(const economy of modes){
+    const tally={
+      seeds:32,matches:0,wins:{A:0,B:0,draw:0},
+      physicalWins:{left:0,right:0,draw:0},
+      normal:{A:0,B:0,draw:0},
+      swapped:{A:0,B:0,draw:0},
+      sameSeatWinnerPairs:0,oppositeSeatWinnerPairs:0,
+      initialBiasChecks:0,rounds:0,
+      tiedBids:0,tiedFirst:{A:0,B:0},
+      aheadByBid:{A:0,B:0},
+      bids:{A:0,B:0},actions:{A:0,B:0},
+    };
+    for(let i=0;i<tally.seeds;i++){
+      const seed="fair-seat-"+String(i).padStart(3,"0");
+      const ordinary=newPractice(seed,"frontier127","bid-aware-v1",economy);
+      const swapped=seatSwappedAuditCopy(ordinary);
+      assert.equal(ordinary.matchId,swapped.matchId,
+        "Seat-swapped audit must hold the deterministic tie coin fixed");
+      assert.deepEqual(ordinary.state.visible.map(c=>[c.position,c.terrain]),
+        swapped.state.visible.map(c=>[c.position,c.terrain]));
+      assert.deepEqual(ordinary.budgetA,swapped.budgetA);
+      assert.deepEqual(ordinary.budgetB,swapped.budgetB);
+      const opener=u=>u.owner==="A"?"A":"B";
+      assert(ordinary.state.units.filter(u=>opener(u)==="A").every(u=>
+        u.position.q<0),"Ordinary A should deploy to the left");
+      assert(swapped.state.units.filter(u=>opener(u)==="A").every(u=>
+        u.position.q>0),"Swapped A should deploy to the right");
+      assert.equal(new Set(swapped.state.units.map(u=>u.id)).size,10);
+      tally.initialBiasChecks++;
+      const results=[];
+      for(const [variant,game] of [["normal",ordinary],["swapped",swapped]]){
+        while(!game.finished&&game.round<game.state.roundCap){
+          const a=chooseBotRoundOrders(game,"A");
+          const b=chooseBotRoundOrders(game,"B");
+          assert(validatePracticeOrders(game,"A",a).valid);
+          assert(validatePracticeOrders(game,"B",b).valid);
+          const priority=resolveBids({
+            matchId:game.matchId,round:game.round,
+            agentA:{bid:a.bid,plan:{bid:a.bid,extras:[]}},
+            agentB:{bid:b.bid,plan:{bid:b.bid,extras:[]}},
+          });
+          if(a.bid===b.bid){
+            tally.tiedBids++;
+            tally.tiedFirst[priority.first]++;
+            assert.equal(priority.tieBroken,true);
+          }else{
+            const expectedFirst=a.bid>b.bid?"A":"B";
+            assert.equal(priority.first,expectedFirst);
+            tally.aheadByBid[expectedFirst]++;
+          }
+          tally.bids.A+=a.bid;tally.bids.B+=b.bid;
+          for(const [side,orders] of [["A",a],["B",b]]){
+            if(orders.move)tally.actions[side]++;
+            if(orders.move2)tally.actions[side]++;
+            if(orders.attack)tally.actions[side]++;
+          }
+          const step=advancePractice(game,a);
+          assert.equal(step.bidA,a.bid);
+          assert.equal(step.bidB,b.bid);
+        }
+        assert(game.finished,"Swapped full game must reach a terminal outcome");
+        tally.matches++;
+        tally.rounds+=game.round;
+        tally.wins[game.finished.winner]++;
+        tally[variant][game.finished.winner]++;
+        const leftOwner=variant==="normal"?"A":"B";
+        const physicalWinner=game.finished.winner==="draw"?"draw":
+          game.finished.winner===leftOwner?"left":"right";
+        tally.physicalWins[physicalWinner]++;
+        results.push(game.finished.winner);
+      }
+      if(results[0]!=="draw"&&results[1]!=="draw"){
+        if(results[0]===results[1])tally.sameSeatWinnerPairs++;
+        else tally.oppositeSeatWinnerPairs++;
+      }
+    }
+    assert.equal(tally.matches,tally.seeds*2);
+    assert(tally.actions.A>0&&tally.actions.B>0);
+    assert(tally.tiedBids>0,
+      "Coin-flip fairness evidence must observe actual equal-bid rounds");
+    result[economy]={
+      ...tally,meanRounds:Number((tally.rounds/tally.matches).toFixed(2)),
+      shareSeatA:Number((tally.wins.A/tally.matches).toFixed(3)),
+      sharePhysicalLeft:Number((tally.physicalWins.left/tally.matches).toFixed(3)),
+    };
+  }
+  console.log("SEAT_SWAPPED_INITIATIVE_AUDIT",JSON.stringify(result));
+  // Measurement-only until validated competitive balance threshold exists:
+  // forcing 50/50 here would hide a legitimate source of side advantage.
 });
