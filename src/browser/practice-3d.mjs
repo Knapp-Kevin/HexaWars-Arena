@@ -40,7 +40,7 @@ export async function createPractice3D(canvas,overlay,{onHex,onUnavailable}){
   canvas.dataset.renderer=renderer.backend;
   const state={
     active:false,view:null,options:[],selectedId:null,queued:null,
-    bounds:null,terrain:null,epoch:0,animation:null,lastUpload:0,
+    bounds:null,rulesVersion:null,terrain:null,epoch:0,animation:null,lastUpload:0,
     distance:25,home:25,yaw:.71,elevation:1.04,target:[0,.25,0],
     markers:[],mvp:null,drag:new Map(),pinch:0,
   };
@@ -94,7 +94,7 @@ export async function createPractice3D(canvas,overlay,{onHex,onUnavailable}){
   }
   function rebuildMarkers(){
     overlay.replaceChildren();state.markers=[];
-    if(!state.view)return;
+    if(!state.view || state.view.ended)return;
     for(const unit of state.view.units.filter(u=>u.side==="A")){
       const cell=state.view.board.find(c=>c.q===unit.q&&c.r===unit.r);
       if(cell)markerTarget(cell,"select");
@@ -141,8 +141,9 @@ export async function createPractice3D(canvas,overlay,{onHex,onUnavailable}){
     state.options=selection.options??[];
     state.selectedId=selection.selectedId??null;
     state.queued=selection.queued??null;
-    if(!state.bounds){
+    if(!state.bounds || state.rulesVersion!==view.rulesVersion){
       state.bounds=boardBounds(view.board);
+      state.rulesVersion=view.rulesVersion;
       state.home=distanceToHome();
       reset();
     }
@@ -150,7 +151,9 @@ export async function createPractice3D(canvas,overlay,{onHex,onUnavailable}){
     const geometry=buildBattlefieldLayers(projection);
     state.terrain={...geometry.terrain,epoch:++state.epoch};
     renderer.uploadSplitBuffers(state.terrain,geometry.units);
-    const motion=prev&&prev.round!==view.round
+    const sameMatch=prev&&prev.seed===view.seed&&
+      prev.rulesVersion===view.rulesVersion;
+    const motion=sameMatch&&prev.round!==view.round
       ?createReplayTransition(practiceScene(prev),projection)
       :null;
     state.animation=motion&&!reducedMotion.matches&&
