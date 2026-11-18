@@ -314,6 +314,27 @@ async function verifyInteractiveVerdantPractice(mobile=false){
       document.querySelectorAll(".three-d-target.select").length>=2;
   },undefined,{timeout:30000});
   assert.equal(await page.locator("#toggle-3d").getAttribute("aria-pressed"),"true");
+  if(mobile){
+    assert(await page.locator("aside>section.panel:first-child").isHidden(),
+      "Developer-style instruction panel still occupies phone gameplay");
+    const controls=await page.evaluate(()=>{
+      const commit=document.querySelector("#commit-round").getBoundingClientRect();
+      const tray=document.querySelector(".three-d-tray").getBoundingClientRect();
+      const board=document.querySelector("#game-3d").getBoundingClientRect();
+      return {
+        commitTop:commit.top,commitBottom:commit.bottom,
+        trayTop:tray.top,boardTop:board.top,
+        viewport:window.innerHeight,
+        overflow:document.documentElement.scrollWidth-window.innerWidth,
+      };
+    });
+    assert(controls.commitBottom<=controls.viewport+2 &&
+      controls.commitTop>=controls.viewport-140,
+      "Main turn control is below the phone viewport");
+    assert(controls.trayTop<controls.boardTop+160,
+      "Phone squad selector is not located above the battlefield");
+    assert(controls.overflow<=2,"3D gameplay causes horizontal phone overflow");
+  }
   assert(await page.locator("#battle-map").isHidden(),"2D board overlays active Verdant");
   const c=page.locator("#game-3d");
   const home=Number(await c.getAttribute("data-camera-distance"));
