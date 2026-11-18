@@ -10,7 +10,7 @@
  */
 import { initBoard, initHexDiskBoard } from "./rules/engine/board.js";
 import { placeStartingUnits, getAllUnits } from "./rules/engine/units.js";
-import { newBudget } from "./rules/engine/round-state.js";
+import { newBudget, applyCarryover } from "./rules/engine/round-state.js";
 import { runRound } from "./rules/engine/roundDriver.js";
 import { checkVictory } from "./rules/engine/victory.js";
 import { validateRoundPlan } from "./rules/gateway/validator.js";
@@ -95,6 +95,7 @@ export function practiceView(game,side="A"){
     mode:"unranked-local",seed:game.seed,round:game.round,
     topology:game.topology,rulesVersion:game.rulesVersion,
     roundCap:game.state.roundCap,
+    availableAp:applyCarryover(side==="A"?game.budgetA:game.budgetB).apPool,
     board:game.state.visible.map(c=>({
       q:c.position.q,r:c.position.r,terrain:c.terrain,
       controlledBy:c.controlledBy??null,
@@ -102,6 +103,7 @@ export function practiceView(game,side="A"){
     units:[...own,...opponents].map(u=>({
       id:u.id,side:u.owner,q:u.position.q,r:u.position.r,
       hp:u.hp,strength:u.strength,type:u.type,
+      moveRange:MOVE_POINTS[u.type],attackRange:RANGE[u.type],
     })),
     // Public scoreboard totals reveal counts, not concealed positions/HP.
     blue:game.state.units.filter(u=>u.owner==="A"&&u.hp>0).length,
@@ -211,32 +213,103 @@ export function chooseBotAction(game,side="B"){
     a.unitId.localeCompare(b.unitId)||a.to.q-b.to.q||a.to.r-b.to.r);
   return moves[0];
 }
-function checkedPlan(game,side,action){
-  if(!action||action.kind==="pass")return PASS;
-  if(!["move","attack"].includes(action.kind)||typeof action.unitId!=="string"){
-    throw new Error("Select a unit and a move or attack");
+/**
+ * Browser practice accepts old one-action calls for historical contract parity
+ * but the playable UI now submits two independent free round slots.
+ */
+function normalizeOrders(input){
+  if(!input||input.kind==="pass")return {move:null,attack:null,bid:0};
+  if(input.kind){
+    if(!["move","attack"].includes(input.kind))
+      throw new Error("Select a unit and a move or attack");
+    return {move:input.kind==="move"?input:null,
+      attack:input.kind==="attack"?input:null,bid:0};
   }
-  if(!action.to||!Number.isInteger(action.to.q)||!Number.isInteger(action.to.r)||
-    !Number.isInteger(action.to.s)||action.to.q+action.to.r+action.to.s!==0){
-    throw new Error("Invalid hex coordinates");
+  if(typeof input!=="object"||Array.isArray(input))
+    throw new Error("Invalid round order");
+  return {move:input.move??null,attack:input.attack??null,bid:input.bid??0};
+}
+function describeOrders(input){
+  const orders=normalizeOrders(input);
+  const kinds=[];
+  if(orders.move)kinds.push("move");
+  if(orders.attack)kinds.push("attack");
+  return kinds.join("+")||"pass";
+}
+function checkedPlan(game,side,input){
+  const orders=normalizeOrders(input);
+  const budget=applyCarryover(side==="A"?game.budgetA:game.budgetB);
+  if(!Number.isSafeInteger(orders.bid)||orders.bid<0||orders.bid>budget.apPool)
+    throw new Error("Initiative bid exceeds available AP");
+  const plan={bid:orders.bid,extras:[]};
+  for(const [kind,choice] of [["move",orders.move],["attack",orders.attack]]){
+    if(!choice)continue;
+    if(choice.kind!==kind||typeof choice.unitId!=="string")
+      throw new Error("Invalid "+kind+" slot");
+    const to=choice.to;
+    if(!to||!Number.isSafeInteger(to.q)||!Number.isSafeInteger(to.r)||
+      !Number.isSafeInteger(to.s)||to.q+to.r+to.s!==0)
+      throw new Error("Invalid hex coordinates");
+    const unit=ownUnits(game,side).find(u=>u.id===choice.unitId);
+    if(!unit)throw new Error("Not one of your units");
+    const valid=legalCommands(game,side,unit.id).find(x=>
+      x.kind===kind&&exactlySame(x.to,to));
+    if(!valid)throw new Error("That "+kind+" is not legal this round");
+    const fragment=planForAction(unit,valid);
+    if(kind==="move")plan.freeMove=fragment.freeMove;
+    else plan.freeAction=fragment.freeAction;
   }
-  const unit=ownUnits(game,side).find(u=>u.id===action.unitId);
-  if(!unit)throw new Error("Not one of your units");
-  const allowed=legalCommands(game,side,unit.id);
-  const chosen=allowed.find(x=>x.kind===action.kind&&exactlySame(x.to,action.to));
-  if(!chosen)throw new Error("That action is not legal this round");
-  const plan=planForAction(unit,chosen);
-  const valid=validateRoundPlan(plan,side,game.state,
-    side==="A"?game.budgetA:game.budgetB);
-  if(!valid.ok)throw new Error(`Plan rejected: ${valid.reason}`);
+  if(plan.freeMove&&plan.freeAction&&
+    plan.freeMove.unitId===plan.freeAction.unitId){
+    const unit=ownUnits(game,side).find(u=>u.id===plan.freeMove.unitId);
+    // The current resolver fires freeMove before freeAction. Prevent a direct
+    // attack from magically striking a remote target after that move.
+    // Post-move-only targeting needs a separately qualified contract upgrade.
+    if(distance(plan.freeMove.to,plan.freeAction.to) > RANGE[unit.type])
+      throw new Error("That squad would leave attack range after moving");
+  }
+  const result=validateRoundPlan(plan,side,game.state,budget);
+  if(!result.ok)throw new Error("Plan rejected: "+result.reason);
   return plan;
+}
+export function validatePracticeOrders(game,side,orders){
+  if(game.finished)throw new Error("Match already finished");
+  checkedPlan(game,side,orders);
+  return {valid:true,availableAp:applyCarryover(
+    side==="A"?game.budgetA:game.budgetB).apPool};
+}
+/**
+ * Equal round-slot access for the house bot. Preserve its existing primary
+ * deterministic observed-state heuristic, then fill a complementary slot
+ * on a different friendly squad when legally available.
+ */
+export function chooseBotRoundOrders(game,side="B"){
+  const primary=chooseBotAction(game,side);
+  const result={move:null,attack:null,bid:0};
+  if(primary.kind==="pass")return result;
+  result[primary.kind]=primary;
+  const others=ownUnits(game,side).flatMap(u=>legalCommands(game,side,u.id));
+  const complement=primary.kind==="attack"?"move":"attack";
+  const candidates=others.filter(c=>c.kind===complement&&
+    c.unitId!==primary.unitId);
+  if(complement==="move"){
+    const center={q:0,r:0,s:0};
+    candidates.sort((a,b)=>distance(a.to,center)-distance(b.to,center)||
+      a.unitId.localeCompare(b.unitId)||a.to.q-b.to.q||a.to.r-b.to.r);
+  }else{
+    candidates.sort((a,b)=>a.unitId.localeCompare(b.unitId)||
+      a.to.q-b.to.q||a.to.r-b.to.r);
+  }
+  if(candidates.length)result[complement]=candidates[0];
+  return result;
 }
 export function advancePractice(game,action){
   if(game.finished)throw new Error("Match ended; start a new battle");
   if(game.round>=ROUND_CAP)throw new Error("Round limit reached");
-  const planA=checkedPlan(game,"A",action);
-  const aiAction=chooseBotAction(game,"B");
-  const planB=checkedPlan(game,"B",aiAction);
+  const playerOrders=normalizeOrders(action);
+  const botOrders=chooseBotRoundOrders(game,"B");
+  const planA=checkedPlan(game,"A",playerOrders);
+  const planB=checkedPlan(game,"B",botOrders);
   const startingPositions=new Map(game.state.units.map(u=>
     [u.id,clonePos(u.position)]));
   const result=runRound({
@@ -249,7 +322,7 @@ export function advancePractice(game,action){
   game.round+=1;
   // Record the acting side's own move only. Failed moves also become
   // evidence against repeatedly choosing the same blocked destination.
-  for(const [side,command] of [["A",action],["B",aiAction]]){
+  for(const [side,command] of [["A",playerOrders.move],["B",botOrders.move]]){
     if(command?.kind!=="move")continue;
     const from=startingPositions.get(command.unitId);
     if(!from)continue;
@@ -263,13 +336,17 @@ export function advancePractice(game,action){
   const outcome=checkVictory(game.state);
   if(outcome.winner!==null)game.finished=outcome;
   const events=result.events.map(ev=>ev.type);
-  game.history.push({round:game.round,player:action?.kind??"pass",
-    bot:aiAction.kind,events,
-    playerMove:action?.kind==="move"?structuredClone(action):null,
-    botMove:aiAction.kind==="move"?structuredClone(aiAction):null});
+  game.history.push({round:game.round,player:describeOrders(playerOrders),
+    bot:describeOrders(botOrders),events,
+    playerMove:playerOrders.move?structuredClone(playerOrders.move):null,
+    botMove:botOrders.move?structuredClone(botOrders.move):null,
+    playerAttack:playerOrders.attack?structuredClone(playerOrders.attack):null,
+    botAttack:botOrders.attack?structuredClone(botOrders.attack):null,
+    bidA:planA.bid,bidB:planB.bid});
   return {
-    round:game.round,playerAction:action?.kind??"pass",
-    botAction:aiAction.kind,events,ended:game.finished,
+    round:game.round,playerAction:describeOrders(playerOrders),
+    botAction:describeOrders(botOrders),events,ended:game.finished,
+    bidA:planA.bid,bidB:planB.bid,
     state:practiceView(game,"A"),
   };
 }
