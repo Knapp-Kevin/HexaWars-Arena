@@ -1,5 +1,5 @@
 import type { MatchState, RoundPlan, CubeCoord } from "../../shared/types";
-import { MOVE_POINTS } from "../../engine/constants";
+import { MOVE_POINTS } from "../../engine/constants.ts";
 
 /**
  * Round-plan move validation.
