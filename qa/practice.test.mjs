@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createMatch } from "../src/engine/match.ts";
+import {findTraversablePath} from "../src/gateway/validator/move-path.ts";
 import { initHexDiskBoard } from "../src/engine/board.ts";
 import { placeStartingUnits,getAllUnits } from "../src/engine/units.ts";
 import { practiceScene, projectWorldToScreen } from "../src/browser/practice-3d.mjs";
@@ -326,4 +327,32 @@ test("balanced61 200-seed real rules engine bot cohort completes without infinit
   console.log("BALANCED61 BOT COHORT",JSON.stringify({
     ...result,averageRounds:Number((result.rounds/result.matches).toFixed(2)),
   }));
+});
+
+test("live rule validator rejects forged local-practice origin on BOTH versioned boards",()=>{
+  for(const topology of ["legacy81","balanced61"]){
+    const game=newPractice("move-forgery-"+topology,topology);
+    const actor=game.state.units.find(u=>u.owner==="A"&&u.type==="scout")||
+      game.state.units.find(u=>u.owner==="A");
+    assert(actor);
+    const possibilities=legalCommands(game,"A",actor.id).filter(x=>x.kind==="move");
+    assert(possibilities.length,"No legal movement route to test");
+    const legal=possibilities[0];
+    const spoofedFrom={q:actor.position.q+1,r:actor.position.r,s:actor.position.s-1};
+    const spoof={
+      bid:0,extras:[],freeMove:{
+        unitId:actor.id,from:spoofedFrom,to:legal.to,
+      },
+    };
+    const valid=validateRoundPlan(spoof,"A",game.state,game.budgetA);
+    assert.deepEqual(valid,{ok:false,reason:"move_from_mismatch"});
+    const route=findTraversablePath(game.state,actor.position,legal.to,actor.id);
+    assert(route && route.length>0 && route.length<=3);
+    assert.deepEqual(route.at(-1),legal.to);
+    const sourcePlan={bid:0,extras:[],freeMove:{
+      unitId:actor.id,from:actor.position,to:legal.to,path:route,
+    }};
+    assert(validateRoundPlan(sourcePlan,"A",game.state,game.budgetA).ok,
+      "Canonical legal path failed strict validator");
+  }
 });
