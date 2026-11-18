@@ -299,8 +299,10 @@ export function chooseBotAction(game,side="B"){
   // Enemy positions are only those provided by the seat observation above.
   const terrainByCoord=new Map(game.state.visible.map(c=>[key(c.position),c]));
   const center={q:0,r:0,s:0};
+  const objectiveMode=game.economy==="frontier-five-roles-v2";
   const targets=game.state.visible.filter(c=>
-    c.controlledBy!==side && c.terrain!=="mountain" && c.terrain!=="water");
+    c.controlledBy!==side && c.terrain!=="mountain" && c.terrain!=="water" &&
+    (!objectiveMode||c.frontierObjective===true));
   function nearest(pos,points){
     if(!points.length)return 0;
     return Math.min(...points.map(x=>distance(pos,x.position??x)));
@@ -318,9 +320,18 @@ export function chooseBotAction(game,side="B"){
       : distance(unit.position,center)-distance(action.to,center);
     const territoryProgress=
       nearest(unit.position,targets)-nearest(action.to,targets);
-    let score=pursuit*9+territoryProgress*2;
-    if(destination?.controlledBy!==side)score+=12;
-    if(destination?.controlledBy===side)score-=3;
+    let score=objectiveMode
+      ?pursuit*2+territoryProgress*22
+      :pursuit*9+territoryProgress*2;
+    if(objectiveMode){
+      if(destination?.frontierObjective&&destination.controlledBy!==side)
+        score+=35;
+      if(destination?.frontierObjective&&destination.controlledBy===side)
+        score-=18;
+    }else{
+      if(destination?.controlledBy!==side)score+=12;
+      if(destination?.controlledBy===side)score-=3;
+    }
     score-=visitCount*14;
     if(reversal)score-=50;
     // Spread advances among squads rather than repeatedly moving one scout.
@@ -432,8 +443,14 @@ export function chooseBotRoundOrders(game,side="B"){
       const unit=own.find(u=>u.id===choice.unitId);
       const visits=trail.filter(t=>t.unitId===choice.unitId);
       const repeats=visits.filter(t=>t.to===key(choice.to)).length;
-      const progress=distance(unit.position,center)-distance(choice.to,center);
-      return progress*8-repeats*16-visits.length*.5;
+      const objectives=game.economy==="frontier-five-roles-v2"
+        ?game.state.visible.filter(c=>c.frontierObjective&&c.controlledBy!==side):[];
+      const progress=objectives.length
+        ?Math.min(...objectives.map(c=>distance(unit.position,c.position)))-
+          Math.min(...objectives.map(c=>distance(choice.to,c.position)))
+        :distance(unit.position,center)-distance(choice.to,center);
+      const arrival=objectives.some(c=>exactlySame(c.position,choice.to))?30:0;
+      return progress*10+arrival-repeats*16-visits.length*.5;
     }
     candidates.sort((a,b)=>score(b)-score(a)||
       a.unitId.localeCompare(b.unitId)||a.to.q-b.to.q||a.to.r-b.to.r);
@@ -459,11 +476,17 @@ export function chooseBotRoundOrders(game,side="B"){
           previous.to===key(unit.position));
       });
     const middle={q:0,r:0,s:0};
+    const objectiveTargets=game.economy==="frontier-five-roles-v2"
+      ?game.state.visible.filter(c=>c.frontierObjective&&c.controlledBy!==side):[];
+    const progress=move=>{
+      const unit=own.find(u=>u.id===move.unitId);
+      const locations=objectiveTargets.length?objectiveTargets.map(c=>c.position):[middle];
+      const nearest=pos=>Math.min(...locations.map(loc=>distance(pos,loc)));
+      return nearest(unit.position)-nearest(move.to)+
+        (objectiveTargets.some(c=>exactlySame(c.position,move.to))?2:0);
+    };
     moves.sort((a,b)=>
-      (distance(own.find(u=>u.id===b.unitId).position,middle)-
-        distance(b.to,middle))-
-      (distance(own.find(u=>u.id===a.unitId).position,middle)-
-        distance(a.to,middle))||
+      progress(b)-progress(a)||
       a.unitId.localeCompare(b.unitId)||a.to.q-b.to.q||a.to.r-b.to.r);
     for(const move2 of moves){
       try{
