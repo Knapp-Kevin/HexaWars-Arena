@@ -5,6 +5,11 @@ on:
     paths:
       - "src/public/**"
       - "src/browser/**"
+      - "src/engine/**"
+      - "src/gateway/validator.ts"
+      - "src/gateway/validator/**"
+      - "src/gateway/observation.ts"
+      - "src/shared/types.ts"
       - "src/vendor/verdant/**"
       - "src/projection/**"
       - "src/shared/public-match.ts"
@@ -17,6 +22,11 @@ on:
     paths:
       - "src/public/**"
       - "src/browser/**"
+      - "src/engine/**"
+      - "src/gateway/validator.ts"
+      - "src/gateway/validator/**"
+      - "src/gateway/observation.ts"
+      - "src/shared/types.ts"
       - "src/vendor/verdant/**"
       - "src/projection/**"
       - "src/shared/public-match.ts"
@@ -50,9 +60,12 @@ jobs:
         run: node scripts/verify-pages.mjs
       - name: Test symmetric map and deterministic detailed meshes
         run: node --test qa/scene-geometry.test.mjs
+      - name: Test canonical browser rules and complete bot games
+        run: node --test qa/practice.test.mjs
       - name: Parse-check browser output
         run: |
           for f in dist/pages/*.js dist/pages/*.mjs; do node --check "$f"; done
+          find dist/pages/rules -name "*.js" -print0 | xargs -0 -n1 node --check
           node --check qa/browser-smoke.mjs
       - name: Install pinned browser acceptance harness (test-only)
         run: npm --prefix qa install --ignore-scripts --no-audit --no-fund --package-lock=false
@@ -129,7 +142,10 @@ jobs:
           for i in $(seq 1 30); do
             if curl --fail --silent --location https://knapp-kevin.github.io/HexaWars-Arena/ > /dev/null &&
                curl --fail --silent --location https://knapp-kevin.github.io/HexaWars-Arena/verdant.html > /dev/null &&
-               curl --fail --silent --location https://knapp-kevin.github.io/HexaWars-Arena/scene-renderer.mjs > /dev/null; then
+               curl --fail --silent --location https://knapp-kevin.github.io/HexaWars-Arena/scene-renderer.mjs > /dev/null &&
+               curl --fail --silent --location https://knapp-kevin.github.io/HexaWars-Arena/practice.html > /dev/null &&
+               curl --fail --silent --location https://knapp-kevin.github.io/HexaWars-Arena/practice-worker.mjs > /dev/null &&
+               curl --fail --silent --location https://knapp-kevin.github.io/HexaWars-Arena/rules/engine/roundDriver.js > /dev/null; then
                exit 0
             fi
             sleep 2
