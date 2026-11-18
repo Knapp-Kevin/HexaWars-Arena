@@ -59,6 +59,10 @@ Public objective positions and control scores are available to both
 seats; concealed enemy squad locations, actions and the private board
 seed are **not** disclosed by the live seat observation. Live HELLO
 declares all five public coordinates and the required hold conditions.
+Each seat's STATE also publishes the five owners (A, B or neutral),
+even if the site is outside current squad sight. This matches the
+human practice map's public control rings; it does **not** publish
+enemy units, their health, private actions or other unseen hexes.
 
 ## Compatibility and release qualification
 
