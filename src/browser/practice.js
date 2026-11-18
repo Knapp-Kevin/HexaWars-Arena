@@ -8,7 +8,8 @@ const el={
   round:$("round-label"),blue:$("score-blue"),red:$("score-red"),
   selected:$("selected-name"),command:$("command-label"),instruction:$("instruction"),
   notice:$("notice"),event:$("event-label"),commit:$("commit-round"),
-  pass:$("skip-round"),victory:$("victory"),result:$("result"),newBattle:$("new-battle"),
+  pass:$("skip-round"),victory:$("victory"),result:$("result"),
+  resultDetail:$("result-detail"),newBattle:$("new-battle"),changeArena:$("change-arena"),
   threeD:$("game-3d"),threeDMarkers:$("game-3d-markers"),
   toggle3D:$("toggle-3d"),threeDTools:$("game-3d-tools"),
   zoomIn:$("game-3d-in"),zoomOut:$("game-3d-out"),resetView:$("game-3d-reset"),
@@ -184,16 +185,25 @@ function draw(){
 }
 function render(){
   if(!current)return;
-  el.round.textContent="ROUND "+(current.round+1)+" / "+current.roundCap;
+  el.round.textContent=current.ended
+    ? "FINAL · "+current.round+" ROUNDS"
+    : "ROUND "+(current.round+1)+" / "+current.roundCap;
   el.blue.textContent=String(current.blue);
   el.red.textContent=String(current.red);
   if(current.ended){
-    const names={A:"Blue victory",B:"Red victory",draw:"Draw"};
+    const names={A:"Victory",B:"Defeat",draw:"Draw"};
+    const reasons={
+      elimination:"One army remains.",
+      mutual_elimination:"Both armies fought to the last.",
+      territory_control:"The battlefield has been claimed.",
+      turn_cap:"The round limit has been reached.",
+    };
     el.victory.hidden=false;
-    el.result.textContent=(names[current.ended.winner]??"Battle complete")+
-      " · "+(current.ended.reason??"completed");
+    el.result.textContent=names[current.ended.winner]??"Battle complete";
+    el.resultDetail.textContent=(reasons[current.ended.reason]??"The battle is over.")+
+      " · "+current.round+" rounds · Unranked";
     el.command.textContent="Battle complete";
-    status("Resolved locally. No ranked result was recorded.");
+    status("Battle finished. Choose your next battle.");
   }
   updateBusy(busy);draw();sync3D();
 }
@@ -250,18 +260,25 @@ async function advance(action){
     const reply=await request("ACTION",{action});
     current=reply.state;selectedId=null;options=[];queued=null;
     el.selected.textContent="Choose a blue unit";
-    el.command.textContent="New round";
-    const events=reply.events.filter(x=>
-      ["unit_moved","unit_attacked","unit_destroyed"].includes(x)).join(" · ");
-    el.event.textContent="Round "+reply.round+": Blue "+reply.playerAction+
-      ". Red "+reply.botAction+". "+(events||"Positioning")+".";
-    if(!current.ended)status("Choose your next order.");
+    el.command.textContent="Choose a squad";
+    const verbs={move:"advanced",attack:"attacked",pass:"held position"};
+    const summary="Blue "+(verbs[reply.playerAction]??"acted")+
+      " · Red "+(verbs[reply.botAction]??"acted")+
+      (reply.events.includes("unit_destroyed")?" · A squad fell":"");
+    el.event.textContent="Round "+reply.round+" · "+summary;
+    if(!current.ended)status(summary);
     render();
   }catch(e){status(String(e?.message||e));}
   finally{updateBusy(false);}
 }
 el.start.addEventListener("click",startBattle);
 el.newBattle.addEventListener("click",startBattle);
+el.changeArena.addEventListener("click",()=>{
+  if(busy)return;
+  el.victory.hidden=true;
+  el.ready.hidden=false;
+  el.start.focus();
+});
 el.commit.addEventListener("click",()=>{if(queued)void advance(queued);});
 el.pass.addEventListener("click",()=>{void advance({kind:"pass"});});
 el.toggle3D.addEventListener("click",()=>{void toggleView();});
