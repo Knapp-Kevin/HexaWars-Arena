@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createMatch } from "../src/engine/match.ts";
+import { initHexDiskBoard } from "../src/engine/board.ts";
+import { placeStartingUnits,getAllUnits } from "../src/engine/units.ts";
 import { practiceScene, projectWorldToScreen } from "../src/browser/practice-3d.mjs";
 import { resolveCombat } from "../src/engine/combat.ts";
 import { checkVictory } from "../src/engine/victory.ts";
@@ -274,4 +276,50 @@ test("3D picking projection is finite and screen-space consistent",()=>{
   const behind=new Float32Array(identity);
   behind[15]=-1;
   assert.equal(projectWorldToScreen(behind,[0,0,0],100,80),null);
+});
+
+test("balanced61 is separately versioned, symmetric and uses the same engine components",()=>{
+  for(const seed of ["practice-alpha-01","balanced-foo","local-test-42"]){
+    const game=newPractice(seed,"balanced61");
+    const board=initHexDiskBoard(4,numericSeed(seed));
+    placeStartingUnits(board,numericSeed(seed));
+    assert.equal(game.rulesVersion,"hexawars-balanced61-v1");
+    assert.equal(game.topology,"balanced61");
+    assert.equal(game.state.visible.length,61);
+    assert.deepEqual(game.state.visible,board.flat());
+    assert.deepEqual(game.state.units,getAllUnits(board));
+    assert.equal(practiceView(game).rulesVersion,"hexawars-balanced61-v1");
+    assert.equal(practiceView(game).board.length,61);
+    assert(legalCommands(game,"A",game.state.units.find(u=>u.owner==="A").id).length>0);
+    // Historical sessions remain unchanged and explicitly distinguishable.
+    const classic=newPractice(seed,"legacy81");
+    assert.equal(classic.state.visible.length,81);
+    assert.equal(classic.rulesVersion,"hexawars-legacy81-v1");
+    assert.deepEqual(classic.state,createMatch(seed));
+  }
+  assert.throws(()=>newPractice("seed","other"),/Unsupported board topology/);
+});
+test("balanced61 200-seed real rules engine bot cohort completes without infinite moves",()=>{
+  const result={matches:200,turnCaps:0,rounds:0,attacks:0,moves:0,passes:0};
+  for(let i=0;i<200;i++){
+    const game=newPractice("balanced-"+String(i).padStart(3,"0"),"balanced61");
+    while(!game.finished&&game.round<game.state.roundCap){
+      const action=chooseBotAction(game,"A");
+      const output=advancePractice(game,action);
+      result.attacks+=output.events.filter(e=>e==="unit_attacked").length;
+      result.moves+=output.events.filter(e=>e==="unit_moved").length;
+      if(output.playerAction==="pass"&&output.botAction==="pass")result.passes++;
+      assert.equal(practiceView(game).board.length,61);
+      assert(game.navigation.A.length<=16&&game.navigation.B.length<=16);
+    }
+    assert(game.finished,"Balanced board did not finish");
+    result.rounds+=game.round;
+    if(game.round>=game.state.roundCap)result.turnCaps++;
+  }
+  assert(result.turnCaps<=20,"Balanced hex map produces too many 50-round stalemates");
+  assert(result.passes<=10,"Balanced hex map produced repeating mutual pass rounds");
+  assert(result.attacks>0&&result.moves>0,"Balanced map has no meaningful combat");
+  console.log("BALANCED61 BOT COHORT",JSON.stringify({
+    ...result,averageRounds:Number((result.rounds/result.matches).toFixed(2)),
+  }));
 });
