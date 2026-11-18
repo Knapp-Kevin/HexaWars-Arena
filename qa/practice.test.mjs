@@ -10,6 +10,7 @@ import { checkVictory } from "../src/engine/victory.ts";
 import { validateRoundPlan } from "../dist/pages/rules/gateway/validator.js";
 import { runRound,runFrontierRound } from "../dist/pages/rules/engine/roundDriver.js";
 import {cubeLineSymmetric} from "../dist/pages/rules/engine/fog-corrected.js";
+import {createFrontierRoleMatch,numericFrontierSeed,ACTIVE_FRONTIER_RULES_VERSION} from "../dist/pages/rules/engine/frontier-match.js";
 import { resolveBids } from "../dist/pages/rules/engine/bidResolver.js";
 import { newBudget } from "../dist/pages/rules/engine/round-state.js";
 import { validateFrontierRoundPlan } from "../dist/pages/rules/gateway/frontier-round-validator.js";
@@ -1260,4 +1261,27 @@ test("every advertised queued-second-move destination validates on 12 actual see
   }
   assert(attempted>15,"Need actual distinct-unit two-wave movement opportunities");
   assert.equal(valid,attempted);
+});
+
+test("one canonical Frontier match constructor is byte-identical in browser, engine and player views",()=>{
+  for(let i=0;i<40;i++){
+    const seed="shared-source-"+i;
+    const source=createFrontierRoleMatch(seed);
+    const browser=newPractice(seed,"frontier127","bid-aware-v1","frontier-five-roles-v1");
+    assert.deepEqual(browser.state,source,
+      "Browser practice may not independently reinterpret five-role board terrain, stats or combat state");
+    assert.equal(browser.rulesVersion,ACTIVE_FRONTIER_RULES_VERSION);
+    assert.equal(browser.topology,"frontier127");
+    assert.equal(source.units.length,10);
+    assert.equal(numericSeed(seed),numericFrontierSeed(seed));
+    for(const side of ["A","B"]){
+      const observed=practiceView(browser,side);
+      assert.equal(observed.board.length,127);
+      assert.equal(observed.units.filter(u=>u.side===side).length,5);
+      assert(observed.units.filter(u=>u.side===side).every(u=>u.special));
+    }
+    const old=createMatch(seed);
+    assert.equal(old.visible.length,81);
+    assert.equal(old.units.length,6);
+  }
 });

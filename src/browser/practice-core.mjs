@@ -9,7 +9,7 @@
  * the existing seat-specific observation projection.
  */
 import { initBoard, initHexDiskBoard, initFrontierBoard } from "./rules/engine/board.js";
-import { placeStartingUnits, placeFrontierUnits, placeFrontierRoleUnits, getAllUnits } from "./rules/engine/units.js";
+import { placeStartingUnits, placeFrontierUnits, getAllUnits } from "./rules/engine/units.js";
 import { newBudget, applyCarryover } from "./rules/engine/round-state.js";
 import { runRound,runFrontierRound,runFrontierRoleRound } from "./rules/engine/roundDriver.js";
 import { checkVictory } from "./rules/engine/victory.js";
@@ -19,6 +19,7 @@ import { projectSeatObservation } from "./rules/gateway/observation.js";
 import { MOVE_POINTS, FRONTIER_ROLE_MOVE_POINTS, RANGE, ROUND_CAP } from "./rules/engine/constants.js";
 import { FRONTIER_ROLE_SPECIALS } from "./rules/engine/frontier-role-combat.js";
 import { distance } from "./rules/engine/coords.js";
+import {createFrontierRoleMatch,numericFrontierSeed,ACTIVE_FRONTIER_RULES_VERSION} from "./rules/engine/frontier-match.js";
 
 const PASS = Object.freeze({ bid: 0, extras: [] });
 const SIDES = new Set(["A","B"]);
@@ -28,12 +29,7 @@ function exactlySame(a,b){return a.q===b.q&&a.r===b.r&&a.s===b.s;}
 
 /** FNV-1a seed derivation byte-for-byte matching src/engine/match.ts. */
 export function numericSeed(seed){
-  let h=2166136261>>>0;
-  for(let i=0;i<seed.length;i++){
-    h ^= seed.charCodeAt(i);
-    h=Math.imul(h,16777619)>>>0;
-  }
-  return h>>>0;
+  return numericFrontierSeed(seed);
 }
 /** Exact, immutable topology IDs. Do not silently reinterpret old matches. */
 export const PRACTICE_TOPOLOGIES=Object.freeze({
@@ -61,16 +57,20 @@ export function newPractice(seed="practice-alpha-01",topology="legacy81",opponen
     throw new Error("Unsupported economy for this battlefield");
   }
   const encodedSeed=numericSeed(seed);
-  const board=topology==="frontier127"
+  // New Frontier sessions use exactly ONE shared server+browser constructor.
+  // Historical games retain their original deterministic map/role algorithms.
+  const authoritative=economy==="frontier-five-roles-v1"
+    ?createFrontierRoleMatch(seed):null;
+  const board=authoritative?null:topology==="frontier127"
     ?initFrontierBoard(encodedSeed)
     :topology==="balanced61"
       ?initHexDiskBoard(4,encodedSeed)
       :initBoard(9,encodedSeed);
-  if(topology==="frontier127"&&economy==="frontier-five-roles-v1")
-    placeFrontierRoleUnits(board);
-  else if(topology==="frontier127")placeFrontierUnits(board);
-  else placeStartingUnits(board,encodedSeed);
-  const visible=board.flat();
+  if(board){
+    if(topology==="frontier127")placeFrontierUnits(board);
+    else placeStartingUnits(board,encodedSeed);
+  }
+  const visible=authoritative?.visible??board.flat();
   return {
     // Preserve exact legacy match IDs so seeded historical practice traces
     // remain replayable under their original rules, without reinterpretation.
@@ -89,7 +89,7 @@ export function newPractice(seed="practice-alpha-01",topology="legacy81",opponen
     seed,
     topology,
     rulesVersion:economy==="frontier-five-roles-v1"
-      ?"hexawars-frontier127-five-roles-v1"
+      ?ACTIVE_FRONTIER_RULES_VERSION
       :economy==="maneuver-v3-vision"
       ? "hexawars-frontier127-maneuver-v3-vision"
       :economy==="maneuver-v2"
@@ -97,10 +97,9 @@ export function newPractice(seed="practice-alpha-01",topology="legacy81",opponen
       : PRACTICE_TOPOLOGIES[topology],
     ...(usesManeuver(economy)?{economy}:{}),
     round:0,
-    state:{
+    state:authoritative??{
       turn:0,visible,units:getAllUnits(board),score:{a:0,b:0},
       deadline:120000,roundCap:ROUND_CAP,
-      ...(economy==="frontier-five-roles-v1"?{frontierRaiderStrikes:[]}:{}),
     },
     budgetA:newBudget(),
     budgetB:newBudget(),
