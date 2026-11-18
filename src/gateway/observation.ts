@@ -27,6 +27,7 @@ export function projectSeatObservation(
     position: { ...cell.position },
     terrain: cell.terrain,
     controlledBy: cell.controlledBy,
+    ...(cell.frontierObjective?{frontierObjective:true as const}:{}),
     unit: unitsByCoord.get(coordKey(cell.position)),
   }));
   const sight=vision==="frontier-five-roles-v1"
@@ -45,6 +46,7 @@ export function projectSeatObservation(
     })),
     units: friendly.map((unit) => ({ ...unit, position: { ...unit.position } })),
     score: { ...state.score },
+    ...(state.frontierObjectiveHold?{frontierObjectiveHold:{...state.frontierObjectiveHold}}:{}),
     deadline: state.deadline,
     roundCap: state.roundCap,
     // Hidden enemy prepared actions are never part of a seat observation.
