@@ -26,7 +26,7 @@ for (const filename of files) {
 }
 const required = [
   "index.html", "arena.html", "verdant.html", "practice.html", "practice.js",
-  "practice-worker.mjs", "practice-core.mjs", "rules/engine/roundDriver.js",
+  "practice-worker.mjs", "practice-core.mjs", "practice-3d.mjs", "rules/engine/roundDriver.js",
   "rules/gateway/validator.js", "rules/gateway/observation.js", "arena.js",
   "verdant.js", "scene-renderer.mjs", "battlefield-geometry.mjs", "replay-motion.mjs", "demo-replay.js", "public-match.js",
   ".nojekyll", "arena.css", "arena-core.css", "arena-shell.css",
@@ -66,6 +66,15 @@ assert(index.includes('href="./practice.html"'),"Home has no Play vs AI entry");
 assert(lab.includes('href="./practice.html"'),"3D viewer has no gameplay entry");
 assert(practicePage.includes('src="./practice.js"'),"Playable HTML entry missing");
 assert(practiceController.includes('new Worker("./practice-worker.mjs"'),"No isolated gameplay Worker");
+assert(practiceController.includes('import("./practice-3d.mjs")'),"Playable Verdant view not wired");
+assert(practicePage.includes('id="game-3d"')&&practicePage.includes('id="battle-map"'),
+  "Playable WebGL3D and accessible SVG views must both exist");
+const practice3D=readFileSync(join(dir,"practice-3d.mjs"),"utf8");
+assert(practice3D.includes('createBestRenderer')&&practice3D.includes('practiceScene'),
+  "3D playable view does not consume Verdant and the public practice projection");
+assert(practice3D.includes('"./scene-renderer.mjs"'),
+  "Live gameplay 3D still references an unavailable or unapproved renderer");
+
 assert(practiceWorker.includes('advancePractice'),"Gameplay Worker lacks canonical round execution");
 assert(practiceCore.includes('runRound(') && practiceCore.includes('validateRoundPlan('),
   "Practice must use the canonical authoritative rules and plan validator");
