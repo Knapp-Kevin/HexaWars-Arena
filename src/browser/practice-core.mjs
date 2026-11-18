@@ -143,21 +143,37 @@ export function chooseBotAction(game,side="B"){
     });
     return attacks[0];
   }
+  // The defensive bot sometimes holds a close contact instead of blindly
+  // mirroring an opponent's movement. This breaks symmetric scout chases,
+  // preserves attack opportunities and uses only seat-observed positions.
+  if(side==="B" && opponents.length){
+    const nearest=Math.min(...own.flatMap(u=>
+      opponents.map(e=>distance(u.position,e.position))));
+    if(nearest<=4 && game.round%2===0)return {kind:"pass"};
+  }
   const moves=actions.filter(a=>a.kind==="move");
   if(!moves.length)return {kind:"pass"};
-  // The opponent's concealed locations are not used to target moves.
-  // When nothing is seen, advance toward the public center objective.
+  // When no enemy is visible, advance toward the opponent's public deployment
+  // half, not the center where identical policies otherwise circle forever.
+  const scoutTarget=side==="A"?{q:2,r:0,s:-2}:{q:-2,r:0,s:2};
   function targetDistance(pos){
     if(opponents.length)return Math.min(...opponents.map(e=>distance(pos,e.position)));
-    return distance(pos,{q:0,r:0,s:0});
+    return distance(pos,scoutTarget);
   }
-  moves.sort((a,b)=>{
-    const ua=own.find(u=>u.id===a.unitId),ub=own.find(u=>u.id===b.unitId);
-    const gainA=targetDistance(ua.position)-targetDistance(a.to);
-    const gainB=targetDistance(ub.position)-targetDistance(b.to);
-    return (gainB-gainA)||targetDistance(a.to)-targetDistance(b.to)||
-      a.unitId.localeCompare(b.unitId)||a.to.q-b.to.q||a.to.r-b.to.r;
-  });
+  function moveScore(action){
+    const unit=own.find(u=>u.id===action.unitId);
+    const goal=targetDistance(action.to);
+    const prior=game.history.slice(-16).map(row=>
+      side==="A"?row.playerMove:row.botMove)
+      .filter(move=>move&&move.unitId===action.unitId);
+    const lastVisit=prior.findLastIndex(move=>
+      move.to.q===action.to.q&&move.to.r===action.to.r);
+    const repeatPenalty=lastVisit<0?0:(lastVisit+1)*5;
+    const progress=targetDistance(unit.position)-goal;
+    return goal*12+repeatPenalty-progress*4;
+  }
+  moves.sort((a,b)=>moveScore(a)-moveScore(b)||
+    a.unitId.localeCompare(b.unitId)||a.to.q-b.to.q||a.to.r-b.to.r);
   return moves[0];
 }
 function checkedPlan(game,side,action){
@@ -198,7 +214,9 @@ export function advancePractice(game,action){
   if(outcome.winner!==null)game.finished=outcome;
   const events=result.events.map(ev=>ev.type);
   game.history.push({round:game.round,player:action?.kind??"pass",
-    bot:aiAction.kind,events});
+    bot:aiAction.kind,events,
+    playerMove:action?.kind==="move"?structuredClone(action):null,
+    botMove:aiAction.kind==="move"?structuredClone(aiAction):null});
   return {
     round:game.round,playerAction:action?.kind??"pass",
     botAction:aiAction.kind,events,ended:game.finished,
