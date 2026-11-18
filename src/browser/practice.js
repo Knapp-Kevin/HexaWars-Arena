@@ -8,6 +8,9 @@ const el={
   round:$("round-label"),blue:$("score-blue"),red:$("score-red"),
   selected:$("selected-name"),command:$("command-label"),instruction:$("instruction"),
   notice:$("notice"),event:$("event-label"),commit:$("commit-round"),
+  plannedMove:$("planned-move"),plannedAttack:$("planned-attack"),
+  clearMove:$("clear-move"),clearAttack:$("clear-attack"),
+  bidAmount:$("bid-amount"),bidBudget:$("bid-budget"),
   pass:$("skip-round"),victory:$("victory"),result:$("result"),
   resultDetail:$("result-detail"),newBattle:$("new-battle"),changeArena:$("change-arena"),
   threeD:$("game-3d"),threeDMarkers:$("game-3d-markers"),
@@ -18,6 +21,7 @@ const SVG="http://www.w3.org/2000/svg",RADIUS=33,HEIGHT=Math.sqrt(3)*RADIUS;
 const colors={plain:"#4e7e58",forest:"#275541",mountain:"#71818d",water:"#246078"};
 const letters={scout:"S",infantry:"I",heavy:"H"};
 let sequence=0,current=null,selectedId=null,options=[],queued=null,busy=false;
+let orders={move:null,attack:null,bid:0};
 let scene3D=null,using3D=false,threeDLoading=false,threeDFailed=false;
 const requests=new Map();
 const worker=new Worker("./practice-worker.mjs",{type:"module"});
@@ -89,10 +93,32 @@ async function toggleView(){
 }
 
 function status(text){el.notice.textContent=text;}
+function labelOrder(choice){
+  if(!choice||!current)return "Not set";
+  const unit=current.units.find(u=>u.id===choice.unitId);
+  const cell=current.board.find(c=>c.q===choice.to.q&&c.r===choice.to.r);
+  const unitName=(unit?.type??"Squad").toUpperCase();
+  return unitName+" · "+(choice.kind==="attack"?"Attack":"Move to")+" "+
+    (cell?.terrain??"target");
+}
+function showOrders(){
+  el.plannedMove.textContent=labelOrder(orders.move);
+  el.plannedAttack.textContent=labelOrder(orders.attack);
+  const available=current?.availableAp??3;
+  el.bidBudget.textContent=orders.bid+" / "+available+" AP";
+  for(const option of el.bidAmount.options){
+    option.disabled=Number(option.value)>available;
+  }
+  el.bidAmount.value=String(Math.min(orders.bid,available));
+}
 function updateBusy(value){
   busy=value;
-  el.commit.disabled=busy||!queued||!!current?.ended;
+  el.commit.disabled=busy||(!orders.move&&!orders.attack&&orders.bid===0)||
+    !current||!!current.ended;
   el.pass.disabled=busy||!current||!!current.ended;
+  el.clearMove.disabled=busy||!orders.move||!!current?.ended;
+  el.clearAttack.disabled=busy||!orders.attack||!!current?.ended;
+  el.bidAmount.disabled=busy||!current||!!current.ended;
   el.start.disabled=busy;
   el.toggle3D.disabled=busy||!current||threeDLoading||threeDFailed;
 }
@@ -206,7 +232,7 @@ function render(){
     el.command.textContent="Battle complete";
     status("Battle finished. Choose your next battle.");
   }
-  updateBusy(busy);draw();sync3D();
+  showOrders();updateBusy(busy);draw();sync3D();
 }
 async function startBattle(){
   updateBusy(true);status("Deploying squads…");
@@ -216,10 +242,12 @@ async function startBattle(){
       seed:"local-"+crypto.randomUUID().slice(0,12),topology,
     });
     current=reply.state;selectedId=null;queued=null;options=[];
+    orders={move:null,attack:null,bid:0};
+    el.bidAmount.value="0";
     el.ready.hidden=true;el.victory.hidden=true;
     el.selected.textContent="Choose a blue unit";
     el.command.textContent="Select a squad";
-    el.instruction.textContent="Choose a unit, then a white movement or red attack hex.";
+    el.instruction.textContent="Queue one move and one attack. You can revise each before resolving.";
     el.event.textContent=(current.topology==="balanced61"?"Balanced Hex":"Classic Arena")+
       " · Blue command vs Red AI · Unranked practice.";
     status("Your move. Select a blue squad.");
@@ -236,7 +264,8 @@ async function selectUnit(unit){
     el.selected.textContent=unit.type.toUpperCase()+" · "+unit.hp+" HP";
     el.command.textContent=options.length?"Choose a highlighted hex":"No legal orders";
     el.instruction.textContent=options.length?
-      "White hex: move. Red hex: attack. Lock in to resolve both armies.":
+      "Move "+unit.moveRange+" hexes via clear terrain · Attack range "+
+        unit.attackRange+". Queue either or both free slots.":
       "No valid move or visible attack. Select another squad.";
     draw();sync3D();
   }catch(e){status(String(e?.message||e));}
@@ -246,11 +275,21 @@ function clickCell(cell,piece,choice){
   if(!current||busy||current.ended)return;
   if(piece?.side==="A"){void selectUnit(piece);return;}
   if(choice){
-    queued={kind:choice.kind,unitId:selectedId,
-      to:{q:cell.q,r:cell.r,s:-cell.q-cell.r}};
-    el.command.textContent=(choice.kind==="attack"?"Attack ":"Move to ")+cell.q+", "+cell.r;
-    status("Order ready. Lock in to resolve the round.");
-    updateBusy(false);draw();sync3D();
+    void (async()=>{
+      const candidate={kind:choice.kind,unitId:selectedId,
+        to:{q:cell.q,r:cell.r,s:-cell.q-cell.r}};
+      const revised={...orders,[choice.kind]:candidate};
+      updateBusy(true);
+      try{
+        await request("PREVIEW",{orders:revised});
+        orders=revised;queued=candidate;
+        el.command.textContent=choice.kind==="attack"?"Attack queued":"Move queued";
+        status("Order queued. Add the other action or resolve your round.");
+        showOrders();draw();sync3D();
+      }catch(error){
+        status(String(error?.message??error));
+      }finally{updateBusy(false);}
+    })();
   }else if(!selectedId)status("Select a blue squad first.");
   else status("That hex is not a legal target.");
 }
@@ -260,9 +299,12 @@ async function advance(action){
   try{
     const reply=await request("ACTION",{action});
     current=reply.state;selectedId=null;options=[];queued=null;
+    orders={move:null,attack:null,bid:0};
+    el.bidAmount.value="0";
     el.selected.textContent="Choose a blue unit";
     el.command.textContent="Choose a squad";
-    const verbs={move:"advanced",attack:"attacked",pass:"held position"};
+    const verbs={move:"advanced",attack:"attacked",
+      "move+attack":"advanced and attacked",pass:"held position"};
     const summary="Blue "+(verbs[reply.playerAction]??"acted")+
       " · Red "+(verbs[reply.botAction]??"acted")+
       (reply.events.includes("unit_destroyed")?" · A squad fell":"");
@@ -280,7 +322,31 @@ el.changeArena.addEventListener("click",()=>{
   el.ready.hidden=false;
   el.start.focus();
 });
-el.commit.addEventListener("click",()=>{if(queued)void advance(queued);});
+el.commit.addEventListener("click",()=>{void advance({...orders});});
+el.clearMove.addEventListener("click",()=>{
+  if(busy)return;
+  orders.move=null;
+  queued=orders.attack;
+  showOrders();updateBusy(false);draw();sync3D();
+  status("Move cleared.");
+});
+el.clearAttack.addEventListener("click",()=>{
+  if(busy)return;
+  orders.attack=null;
+  queued=orders.move;
+  showOrders();updateBusy(false);draw();sync3D();
+  status("Attack cleared.");
+});
+el.bidAmount.addEventListener("change",()=>{
+  if(busy||!current)return;
+  const next=Number(el.bidAmount.value);
+  if(!Number.isSafeInteger(next)||next<0||next>current.availableAp){
+    el.bidAmount.value=String(orders.bid);return;
+  }
+  orders.bid=next;
+  showOrders();updateBusy(false);
+  status(next>0?"Bid "+next+" AP to act earlier. AP is spent whether you win initiative.":"Initiative bid removed.");
+});
 el.pass.addEventListener("click",()=>{void advance({kind:"pass"});});
 el.toggle3D.addEventListener("click",()=>{void toggleView();});
 el.zoomIn.addEventListener("click",()=>scene3D?.zoomIn());
