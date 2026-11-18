@@ -31,3 +31,9 @@ test("ap-arithmetic: bid + extras exceeds pool", () => {
   const extras: ExtraEntry[] = [{ kind: "boosted_ability", unitId: "u1" }];
   expect(validateApArithmetic({ bid: 3, extras }, 3)).toEqual({ ok: false, reason: "ap_exceeds_pool" });
 });
+test("ap-arithmetic: negative, fractional and nonfinite bids are rejected",()=>{
+  for(const bid of [-1,-2,.5,Number.NaN,Infinity,-Infinity]){
+    expect(validateApArithmetic({bid,extras:[]},3))
+      .toEqual({ok:false,reason:"bid_invalid"});
+  }
+});
