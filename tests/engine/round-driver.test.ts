@@ -251,3 +251,53 @@ describe("dynamic retarget when the original enemy leaves its target hex", () =>
     expect(result.events.some(e=>e.type==="unit_attacked"&&e.payload.agent==="A")).toBe(true);
   });
 });
+
+describe("global Plan D free-move then free-action phases", () => {
+  it("lets the lower-initiative defender finish its move before the winner attacks", () => {
+    const state = mkState([
+      unit("a1", "A", cube(0, 0), "infantry"),
+      unit("b1", "B", cube(1, 0), "heavy"),
+    ], [cube(2, 0)]);
+    const planA: RoundPlan = { bid: 2, extras: [],
+      freeAction: { unitId: "a1", type: "attack", from: cube(0,0), to: cube(1,0) },
+    };
+    const planB: RoundPlan = { bid: 0, extras: [],
+      freeMove: { unitId: "b1", from: cube(1,0), to: cube(2,0) },
+    };
+    expect(validateRoundPlan(planA,"A",state,{apPool:3})).toEqual({ok:true});
+    expect(validateRoundPlan(planB,"B",state,{apPool:3})).toEqual({ok:true});
+    const result = runRound({ matchId: "move-before-attack", round:0, state,
+      planA,planB,budgetA:budget(),budgetB:budget() });
+    expect(result.nextState.units.find(u=>u.id==="b1")?.position).toEqual(cube(2,0));
+    expect(result.nextState.units.find(u=>u.id==="b1")?.hp).toBe(8);
+    expect(result.events.map(e=>e.type)).toContain("action_wasted");
+    expect(result.events.some(e=>e.type==="unit_attacked" && e.payload.agent==="A")).toBe(false);
+  });
+
+  it("preserves initiative ordering within each global phase, including attack after both moves", () => {
+    const state = mkState([
+      unit("a1","A",cube(0,0),"heavy"),
+      unit("b1","B",cube(1,0),"heavy"),
+    ], [cube(-1,0),cube(2,0)]);
+    const planA:RoundPlan = {bid:2,extras:[],
+      freeMove:{unitId:"a1",from:cube(0,0),to:cube(-1,0)},
+      freeAction:{unitId:"a1",type:"attack",from:cube(0,0),to:cube(1,0)},
+    };
+    const planB:RoundPlan = {bid:0,extras:[],
+      freeMove:{unitId:"b1",from:cube(1,0),to:cube(2,0)},
+    };
+    // Heavy has range two; the original attack remains in post-move range.
+    expect(validateRoundPlan(planA,"A",state,{apPool:3})).toEqual({ok:true});
+    expect(validateRoundPlan(planB,"B",state,{apPool:3})).toEqual({ok:true});
+    const result=runRound({matchId:"phase-order",round:0,state,
+      planA,planB,budgetA:budget(),budgetB:budget()});
+    const types=result.events.map(e=>e.type);
+    const moves=result.events.filter(e=>e.type==="unit_moved");
+    expect(moves.map(e=>e.payload.agent)).toEqual(["A","B"]);
+    const lastMove=types.lastIndexOf("unit_moved");
+    const firstAttack=types.indexOf("unit_attacked");
+    // Range from (-1,0) to (2,0) is now 3, so attack is wasted.
+    const firstWaste=types.indexOf("action_wasted");
+    expect(firstAttack===-1 && firstWaste>lastMove).toBe(true);
+  });
+});
