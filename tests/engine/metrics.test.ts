@@ -93,7 +93,10 @@ describe('Metrics', () => {
 
     it('calculates duration from first action to turn record', async () => {
       metrics.recordAction('A', 50, true);
-      await new Promise(resolve => setTimeout(resolve, 10));
+      // Bun and OS timers can wake slightly early (9 ms for a 10 ms
+      // request). Keep the original >=10 ms behavior assertion, but
+      // allow scheduling headroom so this measures Metrics, not jitter.
+      await new Promise(resolve => setTimeout(resolve, 25));
       metrics.recordTurn();
       const result = metrics.finalize();
       expect(result.durationMs).toBeGreaterThanOrEqual(10);
