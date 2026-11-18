@@ -8,7 +8,8 @@ import {FRONTIER_OBJECTIVES,markFrontierObjectives,updateFrontierObjectives,
 import {runFrontierRoleRound,runFrontierObjectiveRound}
   from "../../src/engine/roundDriver.ts";
 import {checkVictory} from "../../src/engine/victory.ts";
-import {newBudget} from "../../src/engine/round-state.ts";
+import {newBudget,applyCarryover} from "../../src/engine/round-state.ts";
+import {validateFrontierRoundPlan} from "../../src/gateway/frontier-round-validator.ts";
 import {projectSeatObservation} from "../../src/gateway/observation.ts";
 import type {CubeCoord,MatchState,Unit,FrontierRoundPlan} from "../../src/shared/types.ts";
 
@@ -150,4 +151,70 @@ describe("single Frontier five-site strategic control",()=>{
     expect(v1.nextState.visible.some(c=>c.frontierObjective)).toBe(false);
     expect(v1.events.some(e=>e.type==="territory_claimed")).toBe(false);
   });
+});
+
+
+describe("objective majority is reachable through actual legal movement from standard spawns",()=>{
+  it("the Scout, Captain and Raider can earn a non-elimination win over a passive opponent",()=>{
+    for(let seedIndex=0;seedIndex<4;seedIndex++){
+      let state=createFrontierObjectiveMatch("reachable-objectives-"+seedIndex);
+      let budgetA=newBudget(),budgetB=newBudget();
+      let claims=0,won=false;
+      const roles=["scout","captain","raider"] as const;
+      const objectives=[FRONTIER_OBJECTIVES[0],FRONTIER_OBJECTIVES[1],
+        FRONTIER_OBJECTIVES[2]];
+      for(let round=0;round<30;round++){
+        const moves:{unitId:string;from:CubeCoord;to:CubeCoord}[]=[];
+        for(let i=0;i<roles.length;i++){
+          const unit=state.units.find(u=>u.owner==="A"&&u.type===roles[i]);
+          expect(unit).toBeDefined();
+          const target=objectives[i];
+          const startDistance=Math.max(
+            Math.abs(unit!.position.q-target.q),
+            Math.abs(unit!.position.r-target.r),
+            Math.abs(unit!.position.s-target.s));
+          if(startDistance===0)continue;
+          const candidates=state.visible.filter(c=>c.terrain!=="water"&&
+            c.terrain!=="mountain").map(c=>({
+              destination:c.position,
+              distance:Math.max(Math.abs(c.position.q-target.q),
+                Math.abs(c.position.r-target.r),Math.abs(c.position.s-target.s)),
+            })).filter(c=>c.distance<startDistance)
+            .sort((a,b)=>a.distance-b.distance||
+              a.destination.q-b.destination.q||a.destination.r-b.destination.r);
+          for(const candidate of candidates){
+            const move={unitId:unit!.id,from:{...unit!.position},to:{...candidate.destination}};
+            const trial:FrontierRoundPlan={...pass,freeMove:moves[0]??move,
+              ...(moves.length?{secondMove:move}:{})};
+            if(validateFrontierRoundPlan(trial,"A",state,applyCarryover(budgetA),true).ok){
+              moves.push(move);break;
+            }
+          }
+          if(moves.length===2)break;
+        }
+        const aPlan:FrontierRoundPlan={...pass,
+          ...(moves.length?{freeMove:moves[0]}:{}),
+          ...(moves.length>1?{secondMove:moves[1]}:{})};
+        const result=runFrontierObjectiveRound({
+          matchId:"reachable-"+seedIndex,round,state,planA:aPlan,planB:pass,
+          budgetA,budgetB,
+        });
+        state=result.nextState;
+        budgetA=result.nextBudgetA;budgetB=result.nextBudgetB;
+        claims+=result.events.filter(e=>e.type==="territory_claimed"&&
+          e.payload.owner==="A").length;
+        const victory=checkVictory(state);
+        if(victory.winner==="A"){
+          expect(victory.reason).toBe("territory_control");
+          expect(state.units.filter(u=>u.owner==="B"&&u.hp>0).length).toBe(5);
+          expect(state.score.a).toBeGreaterThanOrEqual(3);
+          expect(state.frontierObjectiveHold!.a).toBeGreaterThanOrEqual(3);
+          expect(round).toBeLessThan(29);
+          won=true;break;
+        }
+      }
+      expect(claims).toBeGreaterThanOrEqual(3);
+      expect(won).toBe(true);
+    }
+  },15000);
 });
