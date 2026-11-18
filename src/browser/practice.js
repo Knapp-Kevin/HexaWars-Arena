@@ -444,7 +444,9 @@ async function selectUnit(unit,focus=false){
       (orders.move?.unitId===unit.id
         ? "Move queued. Highlighted attacks use the planned destination. Visible enemies only."
         : "Move "+unit.moveRange+" hexes via clear terrain · Attack range "+
-          unit.attackRange+". Queue either or both free slots."):
+          unit.attackRange+(current.economy==="maneuver-v2"
+            ?". Choose two DIFFERENT squads to move. Then one attack."
+            :". Queue either or both free slots.")):
       "No valid move or visible attack. Select another squad.";
     draw();sync3D();
     if(focus)focusSquad(unit);
