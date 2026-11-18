@@ -294,6 +294,15 @@ async function verifyPlayablePractice(mobile=false){
   const squadButtons=page.locator("#squad-roster button");
   assert.equal(await squadButtons.count(),5,
     "Frontier must offer one readable quick-select per friendly squad");
+  const actualRoles=(await squadButtons.allTextContents())
+    .map(label=>label.trim().split(/\s+/)[0].toLowerCase()).sort();
+  assert.deepEqual(actualRoles,["captain","interceptor","raider","scout","siege"],
+    "Every human match must deploy all five distinct canonical tactical classes");
+  const silhouettes=await page.locator("#battle-map .cell .unit").evaluateAll(nodes=>
+    [...new Set(nodes.map(n=>n.tagName.toLowerCase()))]);
+  assert(silhouettes.includes("polygon")&&silhouettes.includes("path")&&
+    silhouettes.includes("circle"),
+    "Role identification must not depend on team color or a text label alone");
   await squadButtons.first().click();
   await page.waitForFunction(()=>document.querySelector('#squad-roster button[aria-pressed="true"]'),
     undefined,{timeout:15000});
@@ -318,8 +327,13 @@ async function verifyPlayablePractice(mobile=false){
     undefined,{timeout:15000});
   assert(await page.locator("#commit-round").isEnabled(),"Cannot submit chosen legal order");
   if(!firstIsAttack){
-    const firstUnit=await squadButtons.first().getAttribute("data-unit-id");
-    const alternate=page.locator("#squad-roster button").filter({hasNotText:"never"});
+    // The first blue cell clicked is not necessarily the first roster
+    // button after units receive distinct role names. Capture the ACTUAL
+    // squad that submitted Move 1, otherwise choosing the first roster
+    // alternate can reselect Move 1 and overwrite it instead of Move 2.
+    const firstUnit=await page.locator(
+      '#squad-roster button[aria-pressed="true"]').getAttribute("data-unit-id");
+    const alternate=page.locator("#squad-roster button");
     let chosen=null;
     for(let index=0;index<await alternate.count();index++){
       const button=alternate.nth(index);
@@ -336,6 +350,8 @@ async function verifyPlayablePractice(mobile=false){
     await page.waitForFunction(()=>!document.querySelector("#clear-move2")?.disabled,
       undefined,{timeout:15000});
     assert(await page.locator("#move-two-slot").isVisible());
+    assert.notEqual((await page.locator("#planned-move").innerText()).trim(),"Not set",
+      "Queuing a second squad must not replace or lose Move 1");
     assert.notEqual((await page.locator("#planned-move2").innerText()).trim(),"Not set",
       "Second squad must be visibly queued in a separate order slot");
     await page.locator("#clear-move2").click();

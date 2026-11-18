@@ -22,11 +22,12 @@ export function validateRoundPlan(
   agent: 'A' | 'B',
   state: MatchState,
   budget: { apPool: number },
+  fiveRoles=false,
 ): RoundPlanValidationResult {
   const checks = [
     () => validateOwnership(plan, agent, state),
     () => validateApArithmetic(plan, budget.apPool),
-    () => validateMovePath(plan, agent, state),
+    () => validateMovePath(plan, agent, state, fiveRoles),
     () => validateAttackRange(plan, agent, state),
     () => validateExtrasUniqueness(plan),
     () => validateBoostedAbilityRequirement(plan),

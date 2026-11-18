@@ -14,7 +14,7 @@ function coordKey(pos: CubeCoord): string {
 export function projectSeatObservation(
   state: MatchState,
   side: "A" | "B",
-  vision: "legacy-v1" | "cube-symmetric-v1" = "legacy-v1",
+  vision: "legacy-v1" | "cube-symmetric-v1" | "frontier-five-roles-v1" = "legacy-v1",
 ): MatchState {
   const unitsByCoord = new Map<string, Unit>();
   for (const unit of state.units) {
@@ -29,8 +29,12 @@ export function projectSeatObservation(
     controlledBy: cell.controlledBy,
     unit: unitsByCoord.get(coordKey(cell.position)),
   }));
-  const see=vision==="cube-symmetric-v1"?visibleCellsSymmetric:visibleCells;
-  const shown = new Set(see([board], side).map(coordKey));
+  const sight=vision==="frontier-five-roles-v1"
+    ?visibleCellsSymmetric([board],side,true)
+    :vision==="cube-symmetric-v1"
+      ?visibleCellsSymmetric([board],side)
+      :visibleCells([board],side);
+  const shown = new Set(sight.map(coordKey));
   const friendly = state.units.filter((unit) => unit.owner === side);
 
   return {

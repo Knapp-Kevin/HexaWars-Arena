@@ -1,5 +1,5 @@
 import type { MatchState, RoundPlan, CubeCoord } from "../../shared/types";
-import { MOVE_POINTS } from "../../engine/constants.ts";
+import { MOVE_POINTS,FRONTIER_ROLE_MOVE_POINTS } from "../../engine/constants.ts";
 
 /**
  * Round-plan move validation.
@@ -68,6 +68,7 @@ export function findTraversablePath(
 
 export function validateMovePath(
   plan: RoundPlan, _agent: "A" | "B", state: MoveState,
+  fiveRoles=false,
 ): MovePathResult {
   const move=plan.freeMove;
   if (!move) return {ok:true};
@@ -84,7 +85,7 @@ export function validateMovePath(
   if(!same(move.from,unit.position))
     return {ok:false,reason:"move_from_mismatch"};
 
-  const range=MOVE_POINTS[unit.type];
+  const range=(fiveRoles?FRONTIER_ROLE_MOVE_POINTS:MOVE_POINTS)[unit.type];
   const dist=distance(move.from,move.to);
   if(dist!==range)return {ok:false,reason:`move_distance_wrong:got${dist}want${range}`};
 

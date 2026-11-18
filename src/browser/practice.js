@@ -21,7 +21,8 @@ const el={
 };
 const SVG="http://www.w3.org/2000/svg",RADIUS=33,HEIGHT=Math.sqrt(3)*RADIUS;
 const colors={plain:"#4e7e58",forest:"#275541",mountain:"#71818d",water:"#246078"};
-const letters={scout:"S",infantry:"I",heavy:"H"};
+const letters={scout:"S",raider:"R",interceptor:"I",siege:"G",captain:"C",
+  infantry:"I",heavy:"H"};
 let sequence=0,current=null,selectedId=null,options=[],queued=null,busy=false;
 let orders={move:null,move2:null,attack:null,bid:0};
 let scene3D=null,using3D=false,threeDLoading=false,threeDFailed=false;
@@ -232,7 +233,7 @@ function renderSquadRoster(){
       button.type="button";
       button.dataset.unitId=unit.id;
       button.setAttribute("aria-label",
-        "Select Blue "+unit.type+" "+n+", "+unit.hp+" health");
+        "Select Blue "+unit.type+" "+n+", "+unit.hp+" health. "+(unit.special??""));
       const name=document.createElement("span");
       name.textContent=unit.type.toUpperCase()+" "+n;
       const health=document.createElement("span");
@@ -356,8 +357,39 @@ function draw(){
         fill:"#b6c1c9","pointer-events":"none"}));
     }
     if(piece){
-      node.append(create("circle",{class:"unit unit-"+(piece.side==="A"?"blue":"red"),
-        cx,cy,r:RADIUS*.53}));
+      const unitClass="unit unit-"+(piece.side==="A"?"blue":"red");
+      const point=(dx,dy)=>(cx+dx).toFixed(2)+","+(cy+dy).toFixed(2);
+      let silhouette;
+      if(piece.type==="scout"){
+        silhouette=create("polygon",{class:unitClass,points:[
+          point(0,-19),point(17,0),point(0,19),point(-17,0),
+        ].join(" ")});
+      }else if(piece.type==="raider"){
+        const heading=piece.side==="A"?1:-1;
+        silhouette=create("polygon",{class:unitClass,points:[
+          point(heading*20,0),point(-heading*13,-17),point(-heading*13,17),
+        ].join(" ")});
+      }else if(piece.type==="interceptor"){
+        silhouette=create("path",{class:unitClass,d:
+          "M "+(cx-16)+" "+(cy-15)+" L "+(cx+16)+" "+(cy-15)+
+          " L "+(cx+14)+" "+(cy+8)+" L "+cx+" "+(cy+20)+
+          " L "+(cx-14)+" "+(cy+8)+" Z"});
+      }else if(piece.type==="siege"){
+        silhouette=create("polygon",{class:unitClass,points:[
+          point(0,-21),point(19,-6),point(13,17),
+          point(-13,17),point(-19,-6),
+        ].join(" ")});
+      }else{
+        silhouette=create("circle",{class:unitClass,cx,cy,r:RADIUS*.53});
+      }
+      node.append(silhouette);
+      if(piece.type==="captain"){
+        node.append(create("path",{d:
+          "M "+(cx-8)+" "+(cy-13)+" L "+(cx+8)+" "+(cy-13)+
+          " M "+cx+" "+(cy-20)+" L "+cx+" "+(cy-7),
+          stroke:"#f4d28a","stroke-width":3,
+          "pointer-events":"none"}));
+      }
       const title=create("text",{class:"unit-label",x:cx,y:cy-2});
       title.textContent=letters[piece.type]??"?";node.append(title);
       const hp=create("text",{class:"unit-hp",x:cx,y:cy+RADIUS*.70});
@@ -436,9 +468,10 @@ async function selectUnit(unit,focus=false){
       (orders.move?.unitId===unit.id
         ? "Move queued. Highlighted attacks use the planned destination. Visible enemies only."
         : "Move "+unit.moveRange+" hexes via clear terrain · Attack range "+
-          unit.attackRange+(current.maxMoves===2
-            ?". Choose two DIFFERENT squads to move. Then one attack."
-            :". Queue either or both free slots.")):
+          unit.attackRange+". "+(unit.special??"")+
+            (current.maxMoves===2
+              ?". Move two different squads, then attack."
+              :". Queue either or both free slots.")):
       "No valid move or visible attack. Select another squad.";
     draw();sync3D();
     if(focus)focusSquad(unit);

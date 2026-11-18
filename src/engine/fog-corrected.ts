@@ -57,7 +57,7 @@ function transparent(cell:HexCell|undefined):boolean {
  * The output never contains cells beyond the actual authoritative board.
  */
 export function visibleCellsSymmetric(
-  board:HexCell[][],side:"A"|"B",
+  board:HexCell[][],side:"A"|"B",extendedScoutVision=false,
 ):CubeCoord[]{
   const cells=board.flat();
   const indexed=new Map(cells.map(c=>[key(c.position),c]));
@@ -65,9 +65,10 @@ export function visibleCellsSymmetric(
   const known=new Map<string,CubeCoord>();
   for(const originCell of friendly){
     const origin=originCell.position;
+    const visionRadius=extendedScoutVision&&originCell.unit?.type==="scout"?4:3;
     for(const targetCell of cells){
       const target=targetCell.position;
-      if(distance(origin,target)>3)continue;
+      if(distance(origin,target)>visionRadius)continue;
       if(key(origin)!==key(target)){
         if(!transparent(targetCell))continue;
         const line=cubeLineSymmetric(origin,target);

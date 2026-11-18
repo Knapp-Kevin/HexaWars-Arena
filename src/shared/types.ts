@@ -15,7 +15,7 @@ export interface Unit {
   position: CubeCoord;
   strength: number; // 1–10
   hp: number; // 1–10
-  type: "infantry" | "scout" | "heavy";
+  type: "infantry" | "scout" | "heavy" | "raider" | "interceptor" | "siege" | "captain";
   weight?: UnitWeight;
 }
 
@@ -33,6 +33,10 @@ export interface MatchState {
   score: { a: number; b: number };
   deadline: number; // Unix ms
   roundCap: number;
+  /** Frontier role economy only: first successful Raider strike is stronger.
+   * This is absent from all archived v1/v2/v3 matches.
+   */
+  frontierRaiderStrikes?: string[];
   /** Plan D Phase 4: active stances, keyed by appliesOnRound */
   stances?: StanceRecord[];
   /** Plan D Phase 4: active reserves */

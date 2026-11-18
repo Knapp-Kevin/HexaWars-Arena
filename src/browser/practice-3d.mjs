@@ -96,7 +96,8 @@ export async function createPractice3D(canvas,overlay,{onHex,onUnavailable}){
     button.dataset.q=String(cell.q);
     button.dataset.r=String(cell.r);
     const unit=state.view.units.find(u=>u.q===cell.q&&u.r===cell.r);
-    const role=unit?.type?.slice(0,1).toUpperCase()??"";
+    const role=unit?.type==="siege"?"G":
+      (unit?.type?.slice(0,1).toUpperCase()??"");
     button.textContent=kind==="select"?(role||"●"):kind==="attack"?"!":"•";
     button.setAttribute("aria-label",kind==="select"
       ?`Select Blue ${unit?.type??"squad"} at ${cell.q},${cell.r}`

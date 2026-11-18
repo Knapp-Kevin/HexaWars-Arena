@@ -1,6 +1,7 @@
 import { resolveBids } from "./bidResolver";
 import { findRetarget } from "./retarget";
 import { resolveCombat } from "./combat";
+import { resolveFrontierRoleCombat } from "./frontier-role-combat.ts";
 import { applyCarryover, applyEndOfRound, applyFrontierEndOfRound, deductBid } from "./round-state";
 import { resolveExtras } from "./round-resolver/extras.ts";
 import { resolveReserveTriggers } from "./round-resolver/triggers.ts";
@@ -42,9 +43,18 @@ export function runFrontierRound(input: FrontierRunRoundInput): RunRoundResult {
   return runRoundInternal(input, true);
 }
 
+/** The ONE new 5v5 game. All five distinct tactical specials are live here,
+ * never in archived versions of runRound or runFrontierRound.
+ * Caller must validate with validateFrontierRoundPlan(...,true).
+ */
+export function runFrontierRoleRound(input:FrontierRunRoundInput):RunRoundResult {
+  return runRoundInternal(input,true,true);
+}
+
 function runRoundInternal(
   input: RunRoundInput | FrontierRunRoundInput,
   maneuverV2: boolean,
+  fiveRoles=false,
 ): RunRoundResult {
   const order = resolveBids({
     matchId: input.matchId,
@@ -116,9 +126,9 @@ function runRoundInternal(
     : {state:waveTwoFirst.state,budget:secondMove.budget,events:[]};
 
   const firstAction = runAgentPhase(
-    firstAgent,firstPlan,waveTwoSecond.state,waveTwoFirst.budget,"action");
+    firstAgent,firstPlan,waveTwoSecond.state,waveTwoFirst.budget,"action",fiveRoles);
   const secondAction = runAgentPhase(
-    secondAgent,secondPlan,firstAction.state,waveTwoSecond.budget,"action");
+    secondAgent,secondPlan,firstAction.state,waveTwoSecond.budget,"action",fiveRoles);
 
   // Phase 4 AP extras: winner's extras first, then loser, preserving declared order.
   const boostFlag: Record<string, { mode: "range" | "damage" } | undefined> = {};
@@ -172,6 +182,7 @@ function runAgentPhase(
   state: MatchState,
   budget: AgentRoundBudget,
   phase: "move" | "action",
+  fiveRoles=false,
 ): AgentOutcome {
   const events: EngineEvent[] = [];
   let nextState = state;
@@ -198,7 +209,7 @@ function runAgentPhase(
   }
 
   if (phase === "action" && plan.freeAction && !skipDead(plan.freeAction.unitId) && plan.freeAction.type === "attack") {
-    const atkOut = doAttack(agent, plan.freeAction.unitId, plan.freeAction.to, nextState);
+    const atkOut = doAttack(agent, plan.freeAction.unitId, plan.freeAction.to, nextState, fiveRoles);
     if (atkOut) {
       nextState = atkOut.state;
       events.push(...atkOut.events);
@@ -250,6 +261,7 @@ function doAttack(
   attackerUnitId: string,
   originalTarget: CubeCoord,
   state: MatchState,
+  fiveRoles=false,
 ): { state: MatchState; events: EngineEvent[] } | null {
   const attacker = state.units.find((u) => u.id === attackerUnitId && u.owner === agent);
   if (!attacker) return null;
@@ -282,7 +294,12 @@ function doAttack(
 
   const defenderCell = state.visible.find((c) => samePos(c.position, defender!.position));
   const terrain: HexCell["terrain"] = defenderCell?.terrain ?? "plain";
-  const result = resolveCombat(attacker, defender, terrain, aimPenalty);
+  const roleResult=fiveRoles
+    ?resolveFrontierRoleCombat(
+      attacker,defender,terrain,state.units,
+      (state.frontierRaiderStrikes??[]).includes(attacker.id),aimPenalty)
+    :null;
+  const result=roleResult??resolveCombat(attacker, defender, terrain, aimPenalty);
 
   const nextUnits: Unit[] = [];
   for (const u of state.units) {
@@ -306,11 +323,28 @@ function doAttack(
       agent,
       attackerUnitId,
       targetUnitId: defender.id,
-      damage: result.attackerHp !== attacker.hp ? attacker.strength : attacker.strength,
+      damage:roleResult?.damageDealt??attacker.strength,
       defenderHp: result.defenderHp,
     },
     timestamp: 0,
   });
+  if (roleResult) {
+    if (roleResult.raiderFirstStrike)
+      events.push({type:"ability_resolved",payload:{
+        role:"raider",ability:"first_strike",unitId:attacker.id,
+        bonusDamage:1,
+      },timestamp:0});
+    if (roleResult.interceptorCounter)
+      events.push({type:"ability_resolved",payload:{
+        role:"interceptor",ability:"counterattack",unitId:defender.id,
+        bonusDamage:1,
+      },timestamp:0});
+    if (roleResult.captainProtection)
+      events.push({type:"ability_resolved",payload:{
+        role:"captain",ability:"defense_aura",protectedUnitId:defender.id,
+        damagePrevented:1,
+      },timestamp:0});
+  }
   if (retargeted) {
     events.push({
       type: "action_retargeted",
@@ -330,7 +364,14 @@ function doAttack(
     events.push({ type: "unit_destroyed", payload: { unitId: id }, timestamp: 0 });
   }
 
-  return { state: { ...state, units: nextUnits, visible: nextVisible }, events };
+  return { state: {
+    ...state, units: nextUnits, visible: nextVisible,
+    ...(fiveRoles && attacker.type==="raider"
+      ? {frontierRaiderStrikes:[...new Set([
+          ...(state.frontierRaiderStrikes??[]),attacker.id,
+        ])]}
+      : {}),
+  }, events };
 }
 
 function buildRefundEvents(

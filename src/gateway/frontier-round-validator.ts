@@ -20,6 +20,7 @@ export function validateFrontierRoundPlan(
   side: "A" | "B",
   state: MatchState,
   budget: { apPool: number },
+  fiveRoles=false,
 ): FrontierPlanValidationResult {
   if (!plan || typeof plan !== "object" || !Array.isArray(plan.extras)) {
     return {ok:false,reason:"frontier_plan_malformed"};
@@ -33,6 +34,15 @@ export function validateFrontierRoundPlan(
   }
   if ("secondMove" in plan && !plan.secondMove) {
     return {ok:false,reason:"frontier_second_move_malformed"};
+  }
+  if(fiveRoles && plan.freeAction?.type==="attack"){
+    const attacker=state.units.find(u=>u.id===plan.freeAction!.unitId);
+    if(attacker?.owner===side && attacker.hp>0 && attacker.type==="siege" && (
+      plan.freeMove?.unitId===attacker.id ||
+      plan.secondMove?.unitId===attacker.id
+    )){
+      return {ok:false,reason:"frontier_siege_cannot_move_and_attack"};
+    }
   }
   const second = plan.secondMove;
   if (second) {
@@ -60,7 +70,7 @@ export function validateFrontierRoundPlan(
     ...(plan.freeMove?{freeMove:plan.freeMove}:{}),
     ...(!attackFromSecond&&plan.freeAction?{freeAction:plan.freeAction}:{}),
   };
-  const first=validateRoundPlan(firstPlan,side,state,budget);
+  const first=validateRoundPlan(firstPlan,side,state,budget,fiveRoles);
   if (!first.ok) return first;
   if (second) {
     const secondPlan: RoundPlan={
@@ -69,7 +79,7 @@ export function validateFrontierRoundPlan(
       freeMove:second,
       ...(attackFromSecond&&plan.freeAction?{freeAction:plan.freeAction}:{}),
     };
-    const result=validateRoundPlan(secondPlan,side,state,budget);
+    const result=validateRoundPlan(secondPlan,side,state,budget,fiveRoles);
     if (!result.ok) return result;
   }
   return {ok:true};
