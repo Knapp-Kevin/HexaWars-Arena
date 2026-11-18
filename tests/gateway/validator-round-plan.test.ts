@@ -5,7 +5,10 @@ import type { RoundPlan, MatchState } from "../../src/shared/types";
 function makeState(units: MatchState["units"]): MatchState {
   return {
     turn: 1,
-    visible: [],
+    visible: Array.from({length:9},(_,ri)=>Array.from({length:9},(_,qi)=>{
+      const q=qi-4,r=ri-4;
+      return {position:{q,r,s:-q-r},terrain:"plain" as const};
+    })).flat(),
     units,
     score: { a: 0, b: 0 },
     deadline: 0,
@@ -69,7 +72,7 @@ test("validateRoundPlan: full valid plan with empty extras passes", () => {
   ]);
   const plan: RoundPlan = {
     bid: 1,
-    freeMove: { unitId: "u1", from: { q: 0, r: 0, s: 0 }, to: { q: 2, r: 0, s: -2 } },
+    freeMove: { unitId: "u1", from: { q: 0, r: 0, s: 0 }, to: { q: 0, r: 2, s: -2 } },
     extras: [],
   };
   expect(validateRoundPlan(plan, "A", state, makeBudget())).toEqual({ ok: true });
