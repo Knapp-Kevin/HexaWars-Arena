@@ -1,5 +1,5 @@
 import type { CubeCoord, HexCell, Unit, UnitWeight } from "../shared/types.ts";
-import { cellAt } from "./board.ts";
+import { cellAt, FRONTIER_STARTS_A } from "./board.ts";
 
 /**
  * Unit type definitions with their base stats.
@@ -128,6 +128,32 @@ export function placeStartingUnits(
     cellA.unit = createUnit("A", posA, type);
   }
 
+  return board;
+}
+
+/**
+ * Frontier127-v1 uses a wider, five-squad deployment on each side.
+ * The 3-squad legacy formation and its seed-derived roster are unchanged.
+ * Fixed role ordering gives both players the same tactical tools instead
+ * of secretly randomizing one side's roster. Distinct five ROLE classes
+ * are a future rules-version change, not implied by this formation.
+ */
+export function placeFrontierUnits(board: HexCell[][]): HexCell[][] {
+  for (let index = 0; index < FRONTIER_STARTS_A.length; index++) {
+    const start = FRONTIER_STARTS_A[index];
+    const a: CubeCoord = { q: start.q, r: start.r, s: start.s };
+    const b: CubeCoord = { q: -a.q, r: -a.r, s: -a.s };
+    for (const [owner, position] of [["A", a], ["B", b]] as const) {
+      const cell = cellAt(board, position);
+      if (!cell || cell.unit || cell.terrain === "mountain" || cell.terrain === "water") {
+        throw new Error("Frontier deployment requires a free, traversable spawn hex");
+      }
+      cell.unit = {
+        ...createUnit(owner, position, start.type),
+        id: `frontier-${owner}-${index+1}-${start.type}`,
+      };
+    }
+  }
   return board;
 }
 
