@@ -75,6 +75,8 @@ function openBot(url: string, token: string): Bot {
       if (frame.type === "STATE") {
         socket.send(JSON.stringify({
           type: "PLAN", matchId: frame.matchId, turn: frame.turn,
+          protocolVersion:frame.protocolVersion,
+          rulesVersion:frame.rulesVersion,
           plan: { bid: 0, extras: [] },
         }));
       }
@@ -144,6 +146,20 @@ test("two real authenticated WebSockets finish a match and fetch persisted repla
     for (const bot of bots) {
       expect(bot.frames.some(f => f.type === "HELLO")).toBe(true);
       expect(bot.frames.some(f => f.type === "STATE")).toBe(true);
+      const hello=bot.frames.find(f=>f.type==="HELLO")!;
+      expect(hello.protocolVersion).toBe("4.0");
+      expect(hello.rulesVersion).toBe("hexawars-frontier127-five-roles-v1");
+      expect(hello.boardCells).toBe(127);
+      expect(hello.freeMoves).toBe(2);
+      const state=bot.frames.find(f=>f.type==="STATE")!;
+      expect(state.protocolVersion).toBe(hello.protocolVersion);
+      expect(state.rulesVersion).toBe(hello.rulesVersion);
+      const units=state.units as Array<{owner:string;type:string}>;
+      expect(units.length).toBe(5);
+      expect(units.every(u=>u.owner===hello.side)).toBe(true);
+      expect(units.map(u=>u.type).sort()).toEqual(
+        ["captain","interceptor","raider","scout","siege"]);
+      expect((state.visible as unknown[]).length).toBeLessThan(127);
       expect(JSON.stringify(bot.frames.filter(f => f.type !== "END"))).not.toContain("match_seed_revealed");
     }
     const id = String(endA.matchId);
