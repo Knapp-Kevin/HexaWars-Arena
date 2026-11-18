@@ -1,5 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { runRound } from "../../src/engine/roundDriver";
+import { validateRoundPlan } from "../../src/gateway/validator";
 import type {
   MatchState,
   Unit,
@@ -183,5 +184,70 @@ describe("runRound", () => {
       budgetA: budget(3), budgetB: budget(3),
     });
     expect(r.ended).toBe(true);
+  });
+});
+
+describe("same-unit attack positioning under contested round moves", () => {
+  it("accepts a reachable move-then-attack and resolves it from the staged hex", () => {
+    const state = mkState([
+      unit("a1", "A", cube(0, 0), "scout"),
+      unit("b1", "B", cube(4, 0), "scout"),
+    ], [cube(1, 0), cube(2, 0), cube(3, 0)]);
+    const planA: RoundPlan = { bid: 0, extras: [],
+      freeMove: { unitId: "a1", from: cube(0, 0), to: cube(3, 0) },
+      freeAction: { unitId: "a1", type: "attack", from: cube(0, 0), to: cube(4, 0) },
+    };
+    expect(validateRoundPlan(planA, "A", state, {apPool:3})).toEqual({ok:true});
+    const result = runRound({matchId:"staged",round:0,state,
+      planA,planB:passPlan(),budgetA:budget(),budgetB:budget()});
+    expect(result.nextState.units.find(u=>u.id==="a1")?.position).toEqual(cube(3, 0));
+    expect(result.events.some(e=>e.type==="unit_attacked" && e.payload.agent==="A")).toBe(true);
+  });
+
+  it("refuses a phantom long-range hit after the higher-bid opponent occupies the intended destination", () => {
+    const state = mkState([
+      unit("a1", "A", cube(0, 0), "scout"),
+      unit("b1", "B", cube(3, -1), "heavy"),
+      unit("b2", "B", cube(4, 0), "scout"),
+    ], [cube(1, 0), cube(2, 0), cube(3, 0)]);
+    const planA: RoundPlan = { bid: 0, extras: [],
+      freeMove: { unitId: "a1", from: cube(0, 0), to: cube(3, 0) },
+      freeAction: { unitId: "a1", type: "attack", from: cube(0, 0), to: cube(4, 0) },
+    };
+    const planB: RoundPlan = { bid: 1, extras: [],
+      freeMove: { unitId: "b1", from: cube(3, -1), to: cube(3, 0) },
+    };
+    expect(validateRoundPlan(planA,"A",state,{apPool:3})).toEqual({ok:true});
+    expect(validateRoundPlan(planB,"B",state,{apPool:3})).toEqual({ok:true});
+    const result = runRound({matchId:"collision",round:0,state,
+      planA,planB,budgetA:budget(),budgetB:budget()});
+    expect(result.nextState.units.find(u=>u.id==="a1")?.position).toEqual(cube(0, 0));
+    expect(result.nextState.units.find(u=>u.id==="b2")?.hp).toBe(3);
+    expect(result.events.some(e=>e.type==="unit_attacked" && e.payload.agent==="A")).toBe(false);
+    expect(result.events.some(e=>e.type==="action_wasted" &&
+      e.payload.reason==="no_target_in_range")).toBe(true);
+  });
+});
+
+describe("dynamic retarget when the original enemy leaves its target hex", () => {
+  it("makes a rushed in-range shot after a higher-priority opponent moves", () => {
+    const state = mkState([
+      unit("a1", "A", cube(0, 0), "heavy"),
+      unit("b1", "B", cube(1, 0), "heavy"),
+    ], [cube(2, 0)]);
+    const planA: RoundPlan = { bid: 0, extras: [],
+      freeAction: {unitId:"a1",type:"attack",from:cube(0,0),to:cube(1,0)},
+    };
+    const planB: RoundPlan = { bid: 1, extras: [],
+      freeMove: {unitId:"b1",from:cube(1,0),to:cube(2,0)},
+    };
+    expect(validateRoundPlan(planA,"A",state,{apPool:3})).toEqual({ok:true});
+    expect(validateRoundPlan(planB,"B",state,{apPool:3})).toEqual({ok:true});
+    const result=runRound({matchId:"rush",round:0,state,
+      planA,planB,budgetA:budget(),budgetB:budget()});
+    expect(result.events.some(e=>e.type==="unit_moved"&&e.payload.unitId==="b1")).toBe(true);
+    expect(result.events.some(e=>e.type==="action_retargeted" &&
+      e.payload.attackerUnitId==="a1" && e.payload.actualTargetUnitId==="b1")).toBe(true);
+    expect(result.events.some(e=>e.type==="unit_attacked"&&e.payload.agent==="A")).toBe(true);
   });
 });
