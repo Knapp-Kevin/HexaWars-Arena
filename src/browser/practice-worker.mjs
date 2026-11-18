@@ -5,7 +5,7 @@ self.onmessage=(message)=>{
   if(!Number.isSafeInteger(id))return;
   try{
     if(type==="START"){
-      session=newPractice(seed,topology??"balanced61");
+      session=newPractice(seed,topology??"frontier127");
       self.postMessage({id,ok:true,state:practiceView(session)});
       return;
     }
