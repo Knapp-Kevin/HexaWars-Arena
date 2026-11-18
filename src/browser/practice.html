@@ -236,6 +236,22 @@
       .game3d-tools button{min-width:44px;min-height:44px}
       footer{display:none}
     }
+
+    .squad-roster{position:absolute;top:54px;left:8px;right:8px;z-index:3;
+      display:flex;align-items:center;gap:6px;overflow-x:auto;overflow-y:hidden;
+      padding:6px;border-radius:11px;border:1px solid #688ba7;
+      background:#091d30ed;box-shadow:0 6px 24px #0008;scrollbar-width:thin}
+    .squad-roster button{flex:0 0 auto;min-height:46px;min-width:107px;
+      border-radius:8px;padding:5px 11px;text-align:left;font-size:12px;
+      font-weight:800;letter-spacing:.01em;border-color:#7da6ca;background:#1a3d5f}
+    .squad-roster button[aria-pressed="true"]{border-color:#f7d386;
+      background:#375a72;box-shadow:inset 0 0 0 2px #f7d386}
+    .squad-roster button .hp{display:block;color:#c5e2f2;font-size:11px;font-weight:600}
+    .is-3d .squad-roster{display:none!important}
+    @media(max-width:860px){
+      .squad-roster{top:46px;left:6px;right:6px;gap:5px;padding:5px}
+      .squad-roster button{min-height:46px;min-width:96px;padding:5px 8px;font-size:11px}
+    }
   </style>
   <script type="module" src="./practice.js"></script>
 </head>
@@ -262,6 +278,7 @@
           <button id="game-3d-in" type="button" aria-label="Zoom in">+</button>
           <button id="game-3d-reset" type="button" aria-label="Fit entire battlefield">Fit</button>
         </div>
+        <div id="squad-roster" class="squad-roster" role="group" aria-label="Choose your Blue squad" hidden></div>
         <div id="ready-screen" class="ready">
           <div class="ready-inner">
             <div class="seal" aria-hidden="true">⬡</div>
