@@ -25,7 +25,9 @@ for (const filename of files) {
   assert(!/^(src|\.data|\.arena)\//.test(filename), `Unapproved directory: ${filename}`);
 }
 const required = [
-  "index.html", "arena.html", "verdant.html", "arena.js",
+  "index.html", "arena.html", "verdant.html", "practice.html", "practice.js",
+  "practice-worker.mjs", "practice-core.mjs", "rules/engine/roundDriver.js",
+  "rules/gateway/validator.js", "rules/gateway/observation.js", "arena.js",
   "verdant.js", "scene-renderer.mjs", "battlefield-geometry.mjs", "replay-motion.mjs", "demo-replay.js", "public-match.js",
   ".nojekyll", "arena.css", "arena-core.css", "arena-shell.css",
   "arena-board.css", "arena-dialog.css", "LICENSE-MIT.txt",
@@ -56,6 +58,23 @@ assert(verdant.includes("./battlefield-geometry.mjs"), "Public Verdant geometry 
 assert(verdant.includes("./replay-motion.mjs"), "Public replay animation missing");
 assert(verdant.includes("uploadSplitBuffers"), "Verdant motion is not using static/dynamic GPU buffers");
 assert(lab.includes('src="./verdant.js"'), "3D lab entry missing");
+const practicePage=readFileSync(join(dir,"practice.html"),"utf8");
+const practiceController=readFileSync(join(dir,"practice.js"),"utf8");
+const practiceWorker=readFileSync(join(dir,"practice-worker.mjs"),"utf8");
+const practiceCore=readFileSync(join(dir,"practice-core.mjs"),"utf8");
+assert(index.includes('href="./practice.html"'),"Home has no Play vs AI entry");
+assert(lab.includes('href="./practice.html"'),"3D viewer has no gameplay entry");
+assert(practicePage.includes('src="./practice.js"'),"Playable HTML entry missing");
+assert(practiceController.includes('new Worker("./practice-worker.mjs"'),"No isolated gameplay Worker");
+assert(practiceWorker.includes('advancePractice'),"Gameplay Worker lacks canonical round execution");
+assert(practiceCore.includes('runRound(') && practiceCore.includes('validateRoundPlan('),
+  "Practice must use the canonical authoritative rules and plan validator");
+for (const f of files.filter(x=>x.startsWith("rules/")&&x.endsWith(".js"))) {
+  const text=readFileSync(join(dir,f),"utf8");
+  assert(!/\b(?:bun:|node:|process\.|require\s*\()/.test(text),
+    `Server/runtime code leaked into browser rules: ${f}`);
+}
+
 
 // Every relative ESM import in the published modules must resolve into the
 // Pages artifact, including the project's nested base URL and cache suffixes.

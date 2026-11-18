@@ -77,6 +77,52 @@ await copyFile(resolve(repoRoot, "src/vendor/verdant/LICENSE-APACHE"), join(out,
 await copyFile(resolve(repoRoot, "src/browser/THIRD_PARTY_NOTICES.md"), join(out, "THIRD_PARTY_NOTICES.md"));
 
 const faviconLink = `<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230b1725'/%3E%3Cpath d='M32 8 54 20v24L32 56 10 44V20Z' fill='none' stroke='%2385baff' stroke-width='6'/%3E%3C/svg%3E">`;
+
+// Browser practice: explicitly audited pure engine/validator modules.
+// The server, Node crypto match hashing, Bun SQLite and identity layers are
+// intentionally excluded. Source imports are preserved as native ESM.
+const ruleSources = [
+  "engine/board.ts", "engine/units.ts", "engine/coords.ts",
+  "engine/constants.ts", "engine/bidResolver.ts", "engine/retarget.ts",
+  "engine/combat.ts", "engine/round-state.ts", "engine/roundDriver.ts",
+  "engine/victory.ts", "engine/fog.ts",
+  "engine/round-resolver/extras.ts", "engine/round-resolver/triggers.ts",
+  "gateway/observation.ts", "gateway/validator.ts",
+  "gateway/validator/ownership.ts", "gateway/validator/ap-arithmetic.ts",
+  "gateway/validator/move-path.ts", "gateway/validator/attack-range.ts",
+  "gateway/validator/extras-uniqueness.ts",
+  "gateway/validator/boosted-ability-requirement.ts",
+  "gateway/validator/extras-disallowed.ts",
+];
+const allowedRules = new Set(ruleSources);
+for (const source of ruleSources) {
+  const full = resolve(repoRoot, "src", source);
+  let js = stripTypeScriptTypes(await readFile(full, "utf8"), { mode: "strip" });
+  // Rewrite only relative runtime specifiers. StripTypeScriptTypes erases
+  // import type declarations, so no shared/type modules enter the browser.
+  js = js.replace(/(from\s+["'])(\.{1,2}\/[^"']+)(["'])/g, (_, open, spec, close) => {
+    const referenced = spec.endsWith(".ts") ? spec : spec + ".ts";
+    // Resolve using Node path, and reject any runtime import not allowlisted.
+    const relativeToSrc = resolve(repoRoot, "src", source, "..", referenced)
+      .slice(resolve(repoRoot, "src").length + 1).replaceAll("\\", "/");
+    if (!allowedRules.has(relativeToSrc)) throw new Error(
+      `Unexpected browser rules import ${source}: ${spec} -> ${relativeToSrc}`);
+    return open + (spec.endsWith(".ts") ? spec.slice(0,-3) : spec) + ".js" + close;
+  });
+  if (/\b(?:node:|bun:|process\.|require\s*\(|eval\s*\()/.test(js)) {
+    throw new Error(`Browser rules contain forbidden server/runtime API: ${source}`);
+  }
+  const target = join(out, "rules", source.slice(0,-3) + ".js");
+  await mkdir(resolve(target, ".."), { recursive: true });
+  await writeFile(target, js);
+}
+for (const file of ["practice-core.mjs", "practice-worker.mjs", "practice.js"]) {
+  await copyFile(resolve(repoRoot, "src/browser", file), join(out,file));
+}
+let practiceHtml = await readFile(resolve(repoRoot, "src/browser/practice.html"), "utf8");
+practiceHtml = practiceHtml.replace("</head>", `  ${faviconLink}\n</head>`);
+await writeFile(join(out,"practice.html"), practiceHtml);
+
 let html = await readFile(join(pub, "arena.html"), "utf8");
 html = html
   .replace('<html lang="en">', '<html lang="en" data-pages="true">')
@@ -85,7 +131,7 @@ html = html
   .replaceAll('src="/arena.html', 'src="./arena.html')
   .replace(
     '<button id="openQuickstart"',
-    '<a class="utility-button" href="./verdant.html" style="text-decoration:none;display:inline-flex;align-items:center">Verdant 3D Lab</a>\n        <button id="openQuickstart"',
+    '<a class="utility-button" href="./practice.html" style="text-decoration:none;display:inline-flex;align-items:center;background:#8ac7f7;color:#091d30;font-weight:800">Play vs AI</a>\n        <a class="utility-button" href="./verdant.html" style="text-decoration:none;display:inline-flex;align-items:center">Verdant 3D Lab</a>\n        <button id="openQuickstart"',
   )
   .replace('>View Full Replay</a>', '>Restart replay</a>')
   .replace('<a href="./arena.html" class="footer-action">Go Live</a>',

@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#081523">
+  <meta name="description" content="Play an unranked HexaWars tactical battle against a local AI opponent.">
+  <title>HexaWars Arena | Play vs AI</title>
+  <style>
+    :root{color-scheme:dark;font-family:system-ui,"Segoe UI",sans-serif;background:#07111c;color:#ebf3fd;--muted:#aec1d2;--gold:#efc786}
+    *{box-sizing:border-box}
+    body{margin:0;background:radial-gradient(ellipse at 45% -25%,#24506e,#081321 50%,#060c14)}
+    button,input,a{font:inherit}
+    button{cursor:pointer;border-radius:10px;border:1px solid #46708e;background:#17354e;color:#eff6fe;padding:11px 15px;min-height:45px;font-weight:700}
+    button:hover:not(:disabled){background:#245676}
+    button:disabled{opacity:.42;cursor:not-allowed}
+    button:focus-visible,a:focus-visible,input:focus-visible,[tabindex="0"]:focus-visible{outline:3px solid var(--gold);outline-offset:3px}
+    a{color:#90c9ff;text-decoration:none}
+    .wrap{max-width:1500px;margin:auto;padding:0 22px}
+    header{height:65px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #294155}
+    .brand{color:#f1f7fb;font-size:14px;font-weight:900;letter-spacing:.15em}
+    .brand span{color:var(--gold);font-size:25px;margin-right:8px}
+    nav{display:flex;gap:20px;align-items:center;font-size:13px;font-weight:600}
+    main{padding-top:14px;display:grid;grid-template-columns:minmax(0,1fr) 305px;gap:15px}
+    .stage,.panel{background:#0c1a29;border:1px solid #355470;border-radius:15px;box-shadow:0 16px 35px #0006}
+    .stage{padding:10px;min-width:0;position:relative}
+    .gamebar{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:2px 6px 10px}
+    .faction{display:inline-flex;gap:8px;align-items:center;font-size:12px;font-weight:850;letter-spacing:.04em}
+    .faction strong{border-radius:7px;background:#173750;padding:6px 9px;font-size:17px;color:white}
+    .faction.blue{color:#80bcfc}.faction.red{color:#fc8e91}
+    .round{color:#f1dfae;text-align:center;font-size:12px;font-weight:800}
+    .arena{height:min(75dvh,760px);min-height:480px;position:relative;overflow:hidden;border-radius:10px;background:radial-gradient(ellipse,#102c3e,#07121d 70%);touch-action:pan-y}
+    svg{width:100%;height:100%;display:block;user-select:none}
+    .hex{stroke:#0a2534;stroke-width:2.3;cursor:pointer;transition:stroke .1s,filter .1s}
+    .hex:hover{stroke:#dcf6ff;stroke-width:3.2;filter:brightness(1.2)}
+    .cell:focus-visible .hex{stroke:var(--gold);stroke-width:4}
+    .cell.available .hex{stroke:#c6ebff;stroke-width:4;filter:brightness(1.2)}
+    .cell.attack .hex{stroke:#ff838a;stroke-width:4}
+    .cell.queued .hex{stroke:#f9dc97;stroke-width:5}
+    .cell.selected .hex{stroke:#ffda76;stroke-width:4.5}
+    .unit{pointer-events:none;stroke:#0a1923;stroke-width:2.3}
+    .unit-blue{fill:#68adf3}.unit-red{fill:#ea6973}
+    .unit-label{font-size:21px;font-weight:900;text-anchor:middle;dominant-baseline:central;fill:#07121a;pointer-events:none}
+    .unit-hp{font-size:12px;text-anchor:middle;fill:#eaf9ff;font-weight:800;paint-order:stroke;stroke:#08131c;stroke-width:3;pointer-events:none}
+    .ready{position:absolute;inset:0;background:#061522db;display:grid;place-items:center;padding:22px;text-align:center}
+    .ready[hidden]{display:none}
+    .ready-inner{max-width:340px}
+    .ready .seal{font-size:70px;color:#efc786;line-height:1}
+    .ready h1{font:900 clamp(26px,4vw,40px)/1.1 system-ui;margin:15px 0}
+    .ready p{font-size:14px;line-height:1.5;color:#b9cfe0}
+    #start-battle,#new-battle{background:#83bded;color:#081621;border:0;font-weight:900;min-width:160px}
+    .statusline{padding:11px 7px 2px;color:#bacddd;font-size:12px;min-height:32px}
+    aside{display:flex;flex-direction:column;gap:13px}
+    .panel{padding:19px}
+    .overline{color:var(--gold);font-size:10px;font-weight:850;letter-spacing:.18em;margin:0 0 7px}
+    h2{font-size:17px;line-height:1.15;margin:0 0 11px}
+    .selected-name{color:#eaf6ff;font-size:23px;font-weight:850;margin:4px 0 5px}
+    .detail{color:#aec1d3;line-height:1.5;font-size:13px;min-height:41px}
+    .command{color:#e8dcaf;font-size:14px;font-weight:750;line-height:1.4;min-height:43px;padding:8px 0}
+    .actionbar{display:grid;gap:9px}
+    #commit-round{background:#8ac7f7;border:0;color:#081625}
+    #skip-round{background:#1c3044}
+    .notice{min-height:23px;font-size:12px;color:#c4d2e1;line-height:1.4}
+    .victory{padding-top:15px;border-top:1px solid #355470;margin-top:18px;color:var(--gold);font-weight:800}
+    .victory[hidden]{display:none}
+    .tips{font-size:12px;line-height:1.6;color:#a9bfce}
+    .tips summary{cursor:pointer;color:#c9dbee;font-weight:750}
+    .tips p{margin-bottom:0}
+    footer{font-size:11px;line-height:1.6;color:#8fa6bb;margin:18px 2px 26px}
+    @media(max-width:860px){
+      .wrap{padding:0 8px}
+      header{height:49px}
+      .brand{font-size:11px;letter-spacing:.05em}
+      .brand span{font-size:18px;margin-right:3px}
+      nav{gap:10px;font-size:12px}
+      main{display:flex;flex-direction:column;gap:9px;padding-top:7px}
+      .stage{padding:5px;border-radius:9px}
+      .gamebar{padding:3px 5px 7px}
+      .faction{gap:4px;font-size:10px}
+      .faction strong{padding:4px 7px;font-size:13px}
+      .round{font-size:11px}
+      .arena{height:min(66dvh,650px);min-height:330px;border-radius:7px}
+      .statusline{font-size:11px;padding:7px 5px 3px;min-height:28px}
+      aside{gap:8px}
+      aside .panel{padding:12px 13px}
+      .panel:first-child{display:grid;grid-template-columns:1fr auto;align-items:center;column-gap:9px}
+      .panel:first-child .overline,.panel:first-child h2,.panel:first-child .detail{grid-column:1/-1}
+      .panel:first-child .selected-name{font-size:16px;margin:0;grid-column:1}
+      .panel:first-child .command{font-size:12px;min-height:0;padding:0;grid-column:2;max-width:160px;text-align:right}
+      .actionbar{grid-template-columns:1fr 1fr}
+      .tips{display:none}
+      footer{font-size:10px}
+      .unit-label{font-size:19px}
+    }
+    @media(prefers-reduced-motion:reduce){.hex{transition:none}}
+  </style>
+  <script type="module" src="./practice.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a class="brand" href="./"><span aria-hidden="true">⬡</span> HEXAWARS ARENA</a>
+    <nav aria-label="Navigation"><a href="./verdant.html">3D Replay</a><a href="./">Home</a></nav>
+  </header>
+  <main>
+    <section class="stage" aria-label="Playable tactical arena">
+      <div class="gamebar">
+        <div class="faction blue">BLUE <strong id="score-blue">3</strong></div>
+        <div id="round-label" class="round" aria-live="polite">LOCAL PRACTICE</div>
+        <div class="faction red">RED <strong id="score-red">3</strong></div>
+      </div>
+      <div class="arena">
+        <svg id="battle-map" viewBox="-450 -450 900 900" role="group" aria-label="Interactive hex battlefield. Select a blue squad to see legal destinations and attacks."></svg>
+        <div id="ready-screen" class="ready">
+          <div class="ready-inner">
+            <div class="seal" aria-hidden="true">⬡</div>
+            <h1>Command the arena.</h1>
+            <p>Lead Blue against the Red AI. Pick a squad, choose its move or attack, and lock in your round.</p>
+            <button id="start-battle" type="button">Start battle</button>
+          </div>
+        </div>
+      </div>
+      <div class="statusline" id="event-label" role="status">Unranked practice · Runs on your device</div>
+    </section>
+    <aside>
+      <section class="panel">
+        <p class="overline">YOUR SQUAD</p>
+        <h2>Battle orders</h2>
+        <div class="selected-name" id="selected-name">Choose a blue unit</div>
+        <div class="command" id="command-label">Select a squad</div>
+        <div class="detail" id="instruction">Available moves appear in blue; attacks appear in red.</div>
+      </section>
+      <section class="panel actionbar">
+        <button id="commit-round" type="button" disabled>Lock in order</button>
+        <button id="skip-round" type="button" disabled>Pass round</button>
+        <div class="notice" id="notice" role="status" aria-live="polite"></div>
+        <div class="victory" id="victory" hidden>
+          <div id="result"></div>
+          <button id="new-battle" type="button">New battle</button>
+        </div>
+      </section>
+      <details class="panel tips">
+        <summary>How it works</summary>
+        <p>Each round, both sides submit one free move or attack. Moves use unit-specific ranges. Terrain can block movement, and units can counterattack. Your orders are validated by the original HexaWars rules engine, which runs locally in a Web Worker.</p>
+        <p>Practice uses the original 81-cell rules board until the new balanced map is formally adopted. There is no account, ranking, cloud matchmaking, or reliable anti-cheat protection in a local game.</p>
+      </details>
+    </aside>
+  </main>
+  <footer>LOCAL PRACTICE · Prototype 1 · Original rules engine · No ranked outcomes. Play uses a tactical SVG control surface while the 3D battlefield gains direct command selection in the next visual slice.</footer>
+</div>
+</body>
+</html>
