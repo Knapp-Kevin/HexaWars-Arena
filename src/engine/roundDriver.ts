@@ -1,7 +1,7 @@
 import { resolveBids } from "./bidResolver";
 import { findRetarget } from "./retarget";
 import { resolveCombat } from "./combat";
-import { applyCarryover, applyEndOfRound, deductBid } from "./round-state";
+import { applyCarryover, applyEndOfRound, applyFrontierEndOfRound, deductBid } from "./round-state";
 import { resolveExtras } from "./round-resolver/extras.ts";
 import { resolveReserveTriggers } from "./round-resolver/triggers.ts";
 import { RANGE } from "./constants";
@@ -10,6 +10,8 @@ import { checkVictory } from "./victory";
 import type {
   RunRoundInput,
   RunRoundResult,
+  FrontierRoundPlan,
+  FrontierRunRoundInput,
   EngineEvent,
   MatchState,
   AgentRoundBudget,
@@ -26,6 +28,24 @@ interface AgentOutcome {
 }
 
 export function runRound(input: RunRoundInput): RunRoundResult {
+  return runRoundInternal(input, false);
+}
+
+/**
+ * New opt-in 5v5 command economy. Alternates two global movement waves
+ * between the seats (priority by bid in each wave), then BOTH free actions.
+ * Legacy runRound, action shape and archived replay behavior remain unchanged.
+ *
+ * Caller must validate each submitted plan with validateFrontierRoundPlan.
+ */
+export function runFrontierRound(input: FrontierRunRoundInput): RunRoundResult {
+  return runRoundInternal(input, true);
+}
+
+function runRoundInternal(
+  input: RunRoundInput | FrontierRunRoundInput,
+  maneuverV2: boolean,
+): RunRoundResult {
   const order = resolveBids({
     matchId: input.matchId,
     round: input.round,
@@ -77,8 +97,28 @@ export function runRound(input: RunRoundInput): RunRoundResult {
   // Resolve both moves first, then both free actions, then AP extras.
   const firstMove = runAgentPhase(firstAgent, firstPlan, stateAfterReserve, firstStart, "move");
   const secondMove = runAgentPhase(secondAgent, secondPlan, firstMove.state, secondStart, "move");
-  const firstAction = runAgentPhase(firstAgent, firstPlan, secondMove.state, firstMove.budget, "action");
-  const secondAction = runAgentPhase(secondAgent, secondPlan, firstAction.state, secondMove.budget, "action");
+
+  // In maneuver-v2 both teams receive a SECOND movement opportunity. Resolve
+  // this as a new global wave, never let one side execute both moves while
+  // the opponent has not moved. Distinct-unit enforcement occurs at the
+  // boundary validator and contested destinations are checked live here.
+  const waveTwoFirst: AgentOutcome = maneuverV2
+    ? runAgentPhase(firstAgent, {
+        ...firstPlan,
+        freeMove:(firstPlan as FrontierRoundPlan).secondMove,
+      },secondMove.state,firstMove.budget,"move")
+    : {state:secondMove.state,budget:firstMove.budget,events:[]};
+  const waveTwoSecond: AgentOutcome = maneuverV2
+    ? runAgentPhase(secondAgent,{
+        ...secondPlan,
+        freeMove:(secondPlan as FrontierRoundPlan).secondMove,
+      },waveTwoFirst.state,secondMove.budget,"move")
+    : {state:waveTwoFirst.state,budget:secondMove.budget,events:[]};
+
+  const firstAction = runAgentPhase(
+    firstAgent,firstPlan,waveTwoSecond.state,waveTwoFirst.budget,"action");
+  const secondAction = runAgentPhase(
+    secondAgent,secondPlan,firstAction.state,waveTwoSecond.budget,"action");
 
   // Phase 4 AP extras: winner's extras first, then loser, preserving declared order.
   const boostFlag: Record<string, { mode: "range" | "damage" } | undefined> = {};
@@ -95,14 +135,20 @@ export function runRound(input: RunRoundInput): RunRoundResult {
 
   const budgetAPre = firstAgent === "A" ? firstAction.budget : secondAction.budget;
   const budgetBPre = firstAgent === "A" ? secondAction.budget : firstAction.budget;
-  const budgetA = applyEndOfRound(budgetAPre);
-  const budgetB = applyEndOfRound(budgetBPre);
+  const closeout=maneuverV2?applyFrontierEndOfRound:applyEndOfRound;
+  const budgetA = closeout(budgetAPre);
+  const budgetB = closeout(budgetBPre);
 
-  const refundEvents = buildRefundEvents(input.budgetA, budgetA, input.budgetB, budgetB, input.round);
+  // The legacy refund event describes its frozen free-slot accounting. V2
+  // never refunds unused free opportunities into AP, so do not fabricate one.
+  const refundEvents = maneuverV2 ? [] :
+    buildRefundEvents(input.budgetA, budgetA, input.budgetB, budgetB, input.round);
   const events = [
     ...reserveEvents,
     ...firstMove.events,
     ...secondMove.events,
+    ...waveTwoFirst.events,
+    ...waveTwoSecond.events,
     ...firstAction.events,
     ...secondAction.events,
     ...extrasCtx.events,
