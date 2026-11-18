@@ -55,8 +55,11 @@ export async function createPractice3D(canvas,overlay,{onHex,onUnavailable}){
   function distanceToHome(){
     const rect=canvas.getBoundingClientRect();
     const aspect=rect.width/Math.max(1,rect.height);
-    return Math.max(20,state.bounds.halfExtent*3.1)*
-      Math.max(1,1.04/Math.max(.53,aspect));
+    // The previous technical preview left the board occupying only ~40%
+    // of a phone viewport. Fit a playable overview while reserving the
+    // top command ribbon and bottom camera controls for touch.
+    return Math.max(18,state.bounds.halfExtent*2.45)*
+      Math.max(1,.95/Math.max(.53,aspect));
   }
   function setZoom(value){
     state.distance=clamp(value,state.home*.46,state.home*2.6);
