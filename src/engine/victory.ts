@@ -1,4 +1,6 @@
 import type { MatchState } from "../shared/types.ts";
+import { FRONTIER_OBJECTIVE_HOLD_ROUNDS,FRONTIER_OBJECTIVE_MAJORITY,
+  FRONTIER_OBJECTIVES } from "./frontier-objectives.ts";
 
 interface VictoryResult {
   winner: "A" | "B" | "draw" | null;
@@ -26,6 +28,29 @@ export function checkVictory(state: MatchState): VictoryResult {
   }
   if (unitCountB === 0) {
     return { winner: "A", reason: "elimination" };
+  }
+
+  // One CURRENT Frontier product ruleset: own >=3/5 authored sites for
+  // 3 consecutive completed rounds. Never confuse this with archived
+  // transient 60%-of-all-cells rule; version flag is mandatory.
+  if(state.frontierObjectiveHold){
+    const sites=visible.filter(c=>c.frontierObjective===true);
+    if(sites.length!==FRONTIER_OBJECTIVES.length)
+      throw new Error("Invalid objective board in canonical victory check");
+    const a=sites.filter(c=>c.controlledBy==="A").length;
+    const b=sites.filter(c=>c.controlledBy==="B").length;
+    if(a>=FRONTIER_OBJECTIVE_MAJORITY &&
+        state.frontierObjectiveHold.a>=FRONTIER_OBJECTIVE_HOLD_ROUNDS)
+      return {winner:"A",reason:"territory_control"};
+    if(b>=FRONTIER_OBJECTIVE_MAJORITY &&
+        state.frontierObjectiveHold.b>=FRONTIER_OBJECTIVE_HOLD_ROUNDS)
+      return {winner:"B",reason:"territory_control"};
+    if(state.turn>=state.roundCap){
+      if(a>b)return {winner:"A",reason:"turn_cap"};
+      if(b>a)return {winner:"B",reason:"turn_cap"};
+      return {winner:"draw",reason:"turn_cap"};
+    }
+    return {winner:null,reason:null};
   }
 
   const controlledByA = visible.filter((c) => c.controlledBy === "A").length;
