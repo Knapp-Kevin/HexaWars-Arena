@@ -290,11 +290,29 @@ export function chooseBotRoundOrders(game,side="B"){
   result[primary.kind]=primary;
   const others=ownUnits(game,side).flatMap(u=>legalCommands(game,side,u.id));
   const complement=primary.kind==="attack"?"move":"attack";
+  const trail=game.navigation?.[side]??[];
+  const own=ownUnits(game,side);
   const candidates=others.filter(c=>c.kind===complement&&
-    c.unitId!==primary.unitId);
+    c.unitId!==primary.unitId &&
+    (complement!=="move" || (()=>{
+      const unit=own.find(u=>u.id===c.unitId);
+      const previous=trail.filter(x=>x.unitId===c.unitId).at(-1);
+      // A second free move must not undo the same unit's prior move.
+      // If every candidate is a reversal, leave the optional slot unused.
+      return unit && !(previous &&
+        previous.from===key(c.to) &&
+        previous.to===key(unit.position));
+    })()));
   if(complement==="move"){
     const center={q:0,r:0,s:0};
-    candidates.sort((a,b)=>distance(a.to,center)-distance(b.to,center)||
+    function score(choice){
+      const unit=own.find(u=>u.id===choice.unitId);
+      const visits=trail.filter(t=>t.unitId===choice.unitId);
+      const repeats=visits.filter(t=>t.to===key(choice.to)).length;
+      const progress=distance(unit.position,center)-distance(choice.to,center);
+      return progress*8-repeats*16-visits.length*.5;
+    }
+    candidates.sort((a,b)=>score(b)-score(a)||
       a.unitId.localeCompare(b.unitId)||a.to.q-b.to.q||a.to.r-b.to.r);
   }else{
     candidates.sort((a,b)=>a.unitId.localeCompare(b.unitId)||
