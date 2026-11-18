@@ -144,6 +144,14 @@
       .is-3d aside .panel.actionbar .victory{grid-column:1/-1}
       .is-3d footer{display:none}
     }
+    .board-choice{border:0;padding:0;margin:14px 0 17px;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .board-choice legend{width:100%;margin:0 0 8px;text-align:center;font-size:11px;color:#ddc391;font-weight:850;letter-spacing:.14em}
+    .board-choice label{position:relative;border:1px solid #536c85;border-radius:10px;background:#173049;padding:11px 6px;display:grid;gap:3px;cursor:pointer;min-height:76px}
+    .board-choice label:has(input:checked){border-color:#f2d08b;background:#23465b;box-shadow:inset 0 0 0 1px #d9b77a}
+    .board-choice label input{position:absolute;top:9px;right:8px;accent-color:#eecf98}
+    .board-choice label strong{font-size:13px;color:#f6f9fa}
+    .board-choice label small{font-size:10px;line-height:1.3;color:#b9cfdf}
+    @media(max-width:860px){.board-choice label{min-height:72px;padding:9px 6px}}
   </style>
   <script type="module" src="./practice.js"></script>
 </head>
@@ -174,7 +182,14 @@
           <div class="ready-inner">
             <div class="seal" aria-hidden="true">⬡</div>
             <h1>Command the arena.</h1>
-            <p>Lead Blue against the Red AI. Pick a squad, choose its move or attack, and lock in your round.</p>
+            <p>Lead Blue against the Red AI. Pick a squad, give your order, and claim the arena.</p>
+            <fieldset class="board-choice" aria-label="Choose battlefield">
+              <legend>BATTLEFIELD</legend>
+              <label><input type="radio" name="arena-topology" value="balanced61" checked>
+                <strong>Balanced Hex</strong><small>Symmetric arena · Preview</small></label>
+              <label><input type="radio" name="arena-topology" value="legacy81">
+                <strong>Classic</strong><small>Original battlefield</small></label>
+            </fieldset>
             <button id="start-battle" type="button">Start battle</button>
           </div>
         </div>

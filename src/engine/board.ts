@@ -96,6 +96,44 @@ export function initBoard(
 }
 
 /**
+ * Experimental, VERSIONED hexagonal-disk topology for unranked practice.
+ * The default initBoard(9) rhombus remains unchanged for historical matches.
+ *
+ * This is a real cube-distance disk, not a clipped rendering of an 81-cell
+ * game. The reflection (q,r,s) -> (s,r,q) preserves q+r+s=0 and is a hex
+ * isometry; paired terrain is assigned from the same seed+canonical coord.
+ * Starting corridors at q=±1,2,3/r=0 are plain on both sides by design.
+ *
+ * Version: balanced61-v1 (radius=4), can only be promoted to ranked after
+ * independent match fairness and historical replay qualification (#12).
+ */
+export function initHexDiskBoard(radius: number = 4, seed: number = 0): HexCell[][] {
+  if(!Number.isInteger(radius)||radius<3||radius>8){
+    throw new Error("Hex disk radius must be an integer from 3 to 8");
+  }
+  const board: HexCell[][]=[];
+  for(let r=-radius;r<=radius;r++){
+    const row:HexCell[]=[];
+    const minimum=Math.max(-radius,-radius-r);
+    const maximum=Math.min(radius,radius-r);
+    for(let q=minimum;q<=maximum;q++){
+      const coord:CubeCoord={q,r,s:-q-r};
+      const mirror:CubeCoord={q:coord.s,r,s:coord.q};
+      // Lexicographic representative makes reflected terrain byte-identical.
+      const representative=(coord.q<mirror.q ||
+        (coord.q===mirror.q&&coord.s<=mirror.s)) ? coord : mirror;
+      const spawn=(r===0&&Math.abs(q)>=1&&Math.abs(q)<=3);
+      row.push({
+        position:coord,
+        terrain:spawn?"plain":terrainFor(seed,representative),
+      });
+    }
+    board.push(row);
+  }
+  return board;
+}
+
+/**
  * Look up a cell by cube coordinate.
  * Returns `undefined` if the coord is outside the board bounds.
  *

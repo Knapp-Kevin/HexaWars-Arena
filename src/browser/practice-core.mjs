@@ -8,7 +8,7 @@
  * competitive/ranked result. Terrain is publicly visible; enemy tokens use
  * the existing seat-specific observation projection.
  */
-import { initBoard } from "./rules/engine/board.js";
+import { initBoard, initHexDiskBoard } from "./rules/engine/board.js";
 import { placeStartingUnits, getAllUnits } from "./rules/engine/units.js";
 import { newBudget } from "./rules/engine/round-state.js";
 import { runRound } from "./rules/engine/roundDriver.js";
@@ -33,16 +33,33 @@ export function numericSeed(seed){
   }
   return h>>>0;
 }
-export function newPractice(seed="practice-alpha-01"){
+/** Exact, immutable topology IDs. Do not silently reinterpret old matches. */
+export const PRACTICE_TOPOLOGIES=Object.freeze({
+  legacy81:"hexawars-legacy81-v1",
+  balanced61:"hexawars-balanced61-v1",
+});
+export function newPractice(seed="practice-alpha-01",topology="legacy81"){
   if(typeof seed!=="string" || !/^[a-zA-Z0-9_-]{1,48}$/.test(seed)){
     throw new Error("Seed must be 1–48 letters, digits, underscores or dashes");
   }
-  const board=initBoard(9,numericSeed(seed));
-  placeStartingUnits(board,numericSeed(seed));
+  if(!Object.hasOwn(PRACTICE_TOPOLOGIES,topology)){
+    throw new Error("Unsupported board topology");
+  }
+  const encodedSeed=numericSeed(seed);
+  const board=topology==="balanced61"
+    ?initHexDiskBoard(4,encodedSeed)
+    :initBoard(9,encodedSeed);
+  placeStartingUnits(board,encodedSeed);
   const visible=board.flat();
   return {
-    matchId:`practice:${seed}`,
+    // Preserve exact legacy match IDs so seeded historical practice traces
+    // remain replayable under their original rules, without reinterpretation.
+    matchId:topology==="legacy81"
+      ?`practice:${seed}`
+      :`practice:${PRACTICE_TOPOLOGIES[topology]}:${seed}`,
     seed,
+    topology,
+    rulesVersion:PRACTICE_TOPOLOGIES[topology],
     round:0,
     state:{
       turn:0,visible,units:getAllUnits(board),score:{a:0,b:0},
@@ -76,6 +93,7 @@ export function practiceView(game,side="A"){
   const victory=game.finished;
   return {
     mode:"unranked-local",seed:game.seed,round:game.round,
+    topology:game.topology,rulesVersion:game.rulesVersion,
     roundCap:game.state.roundCap,
     board:game.state.visible.map(c=>({
       q:c.position.q,r:c.position.r,terrain:c.terrain,
