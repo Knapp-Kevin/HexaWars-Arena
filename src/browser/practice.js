@@ -40,7 +40,8 @@ function on3DHex(q,r){
 function show2D(reason){
   using3D=false;
   scene3D?.deactivate();
-  el.map.hidden=false;
+  // SVGElement does not consistently implement HTMLElement.hidden in Chrome.
+  el.map.removeAttribute("hidden");
   el.threeD.hidden=true;
   el.threeDMarkers.hidden=true;
   el.threeDTools.hidden=true;
@@ -54,7 +55,7 @@ async function toggleView(){
   if(using3D){show2D();return;}
   threeDLoading=true;
   el.toggle3D.disabled=true;
-  el.map.hidden=true;
+  el.map.setAttribute("hidden","");
   el.threeD.hidden=false;
   el.threeDMarkers.hidden=false;
   el.threeDTools.hidden=false;
