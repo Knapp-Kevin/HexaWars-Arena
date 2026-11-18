@@ -8,6 +8,8 @@ describe("resolveCombat", () => {
     const result = resolveCombat(attacker, defender, "plain");
     expect(result.destroyed).toContain("atk-1");
     expect(result.destroyed).not.toContain("def-1");
+    expect(result.attackerHp).toBe(0);
+    expect(result.defenderHp).toBe(1); // Defender wins tie alive, not as 0-HP zombie
   });
 
   it("forest adds +1 defense bonus", () => {
