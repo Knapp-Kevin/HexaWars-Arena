@@ -399,6 +399,9 @@ async function startBattle(){
     const topology=document.querySelector('input[name="arena-topology"]:checked')?.value??"frontier127";
     const reply=await request("START",{
       seed:"local-"+crypto.randomUUID().slice(0,12),topology,
+      // Only the new opponent profile bids intelligently; historical
+      // versioned local practice identities remain byte-identical.
+      opponentPolicy:topology==="frontier127"?"bid-aware-v1":"legacy-v1",
     });
     current=reply.state;selectedId=null;queued=null;options=[];
     rosterSignature="";
@@ -411,7 +414,8 @@ async function startBattle(){
     el.instruction.textContent="Queue one move and one attack. You can revise each before resolving.";
     const arenaName={frontier127:"Frontier · 127 hexes · five squads",
       balanced61:"Balanced Hex · 61 hexes",legacy81:"Classic Arena · 81 hexes"};
-    el.event.textContent=(arenaName[current.topology]??"HexaWars")+" · Blue vs Red AI";
+    el.event.textContent=(arenaName[current.topology]??"HexaWars")+
+      (current.opponentPolicy==="bid-aware-v1"?" · Red AI contests initiative":" · Blue vs Red AI");
     status("Your move. Select a blue squad.");
     render();
   }catch(e){status(String(e?.message||e));}
@@ -483,7 +487,8 @@ async function advance(action){
       "move+attack":"advanced and attacked",pass:"held position"};
     const summary="Blue "+(verbs[reply.playerAction]??"acted")+
       " · Red "+(verbs[reply.botAction]??"acted")+
-      (reply.events.includes("unit_destroyed")?" · A squad fell":"");
+      (reply.events.includes("unit_destroyed")?" · A squad fell":"")+
+      " · Initiative: Blue "+reply.bidA+" AP, Red "+reply.bidB+" AP";
     el.event.textContent="Round "+reply.round+" · "+summary;
     if(!current.ended)status(summary);
     render();
