@@ -265,6 +265,16 @@ async function verifyPlayablePractice(mobile=false){
   assert(symmetry,"Playable arena silhouette is not a mirror-symmetric disk");
   assert.equal((await page.locator("#score-blue").innerText()).trim(),"5");
   assert.equal((await page.locator("#score-red").innerText()).trim(),"5");
+  assert.equal(await page.locator("#battle-map .cell.objective").count(),5,
+    "The human battlefield must show five actual authored capture sites");
+  assert.equal(await page.locator("#battle-map .objective-ring").count(),5,
+    "Control sites require distinctive non-text silhouettes");
+  assert.equal(await page.locator("#objective-score").isVisible(),true,
+    "One shared capture/hold progress strip must be visible");
+  assert((await page.locator("#objective-hold").innerText()).includes("NEED 3/5"),
+    "Show the player's precise three-of-five victory objective");
+  assert((await page.locator("#objective-blue").innerText()).includes("0/5"));
+  assert((await page.locator("#objective-red").innerText()).includes("0/5"));
   // A larger tactical board is only usable if its viewport can actually be
   // inspected without changing legal orders or losing the full-map overview.
   const map=page.locator("#battle-map");
