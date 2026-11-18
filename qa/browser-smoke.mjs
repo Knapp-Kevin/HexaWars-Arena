@@ -235,10 +235,73 @@ async function verifyMobileViewport() {
   console.log(`PASS Mobile viewport: ${width}px 3D canvas and accessible camera controls`);
 }
 
+async function verifyPlayablePractice(mobile=false){
+  const label=mobile?"practice-mobile":"practice-desktop";
+  const page=await newPage(label);
+  if(mobile)await page.setViewportSize({width:390,height:844});
+  const response=await page.goto(new URL("./practice.html",base).href,
+    {waitUntil:"domcontentloaded",timeout:30000});
+  assert(response?.ok(),"Practice HTML not published");
+  assert(await page.locator("#ready-screen").isVisible(),
+    "Practice must not auto-run a match");
+  await page.locator("#start-battle").click();
+  await page.waitForFunction(()=>
+    document.querySelector("#ready-screen")?.hidden===true&&
+    document.querySelectorAll("#battle-map .cell").length===81&&
+    document.querySelector("#round-label")?.textContent?.includes("ROUND 1"),
+    undefined,{timeout:30000});
+  assert.equal((await page.locator("#score-blue").innerText()).trim(),"3");
+  assert.equal((await page.locator("#score-red").innerText()).trim(),"3");
+  const blue=page.locator('#battle-map .cell[aria-label*="Blue"]').first();
+  assert(await blue.count()>0,"No blue unit in practice mode");
+  await blue.click();
+  await page.waitForFunction(()=>
+    document.querySelectorAll("#battle-map .cell.available, #battle-map .cell.attack").length>0,
+    undefined,{timeout:15000});
+  const targets=page.locator("#battle-map .cell.available, #battle-map .cell.attack");
+  const optionsCount=await targets.count();
+  assert(optionsCount>0,"Selection does not expose legal destinations");
+  await targets.first().click();
+  assert(await page.locator("#commit-round").isEnabled(),"Cannot submit chosen legal order");
+  await page.locator("#commit-round").click();
+  await page.waitForFunction(()=>
+    document.querySelector("#round-label")?.textContent?.includes("ROUND 2"),
+    undefined,{timeout:30000});
+  assert((await page.locator("#event-label").innerText()).includes("Red "),
+    "Human command did not resolve the AI's simultaneous plan");
+  assert(await page.locator("#skip-round").isEnabled(),"Cannot advance a pass round");
+  await page.locator("#skip-round").click();
+  await page.waitForFunction(()=>
+    document.querySelector("#round-label")?.textContent?.includes("ROUND 3"),
+    undefined,{timeout:30000});
+  if(mobile){
+    const dimensions=await page.evaluate(()=>({
+      scrollWidth:document.documentElement.scrollWidth,
+      width:window.innerWidth,
+      boardTop:document.querySelector("#battle-map").getBoundingClientRect().top,
+      boardHeight:document.querySelector("#battle-map").getBoundingClientRect().height,
+      buttons:[...document.querySelectorAll("#commit-round,#skip-round")].map(el=>
+        el.getBoundingClientRect().height),
+    }));
+    assert(dimensions.boardTop<110,"Practice map below explanatory text");
+    assert(dimensions.boardHeight>=325&&dimensions.boardHeight<660,"Bad mobile map height");
+    assert(dimensions.scrollWidth<=dimensions.width+2,"Mobile game causes horizontal overflow");
+    assert(dimensions.buttons.every(h=>h>=44),"Touch action targets too small");
+  }
+  await page.screenshot({path:resolve(screenshots,
+    mobile?"practice-mobile.png":"practice-desktop.png"),fullPage:true});
+  assertHealthy(label);
+  console.log("PASS Practice "+(mobile?"mobile":"desktop")+
+    ": 81-cell canonical board, selected legal command, AI response, pass round");
+  await page.close();
+}
+
 try {
   await verifyClassic();
   await verifyVerdant();
   await verifyMobileViewport();
+  await verifyPlayablePractice(false);
+  await verifyPlayablePractice(true);
   console.log(`PASS: browser acceptance at ${base.href}`);
 } catch (error) {
   failures.push(error);
