@@ -35,7 +35,9 @@ async function health(base: string): Promise<void> {
   throw new Error("Bun arena server did not become healthy");
 }
 
-async function rawUpgradeStatus(port: number, token: string): Promise<string> {
+async function rawUpgradeStatus(
+  port:number,token:string,pathname="/api/arena/agents/ws",
+):Promise<string> {
   return new Promise((resolve, reject) => {
     const socket = connect(port, "127.0.0.1");
     let chunk = "";
@@ -44,7 +46,7 @@ async function rawUpgradeStatus(port: number, token: string): Promise<string> {
     socket.on("connect", () => {
       const key = randomBytes(16).toString("base64");
       socket.write(
-        "GET /api/arena/agents/ws HTTP/1.1\r\n" +
+        `GET ${pathname} HTTP/1.1\r\n` +
         `Host: 127.0.0.1:${port}\r\n` +
         "Connection: Upgrade\r\nUpgrade: websocket\r\n" +
         `Sec-WebSocket-Key: ${key}\r\n` +
@@ -173,6 +175,13 @@ test("two real authenticated WebSockets finish a match and fetch persisted repla
     const status=await statusRes.json() as Record<string,unknown>;
     expect(status).toEqual({state:"active",round:0,roundCap:50});
     expect(JSON.stringify(status)).not.toContain("seed");
+    // Before a terminal outcome, append-only events can expose a concealed
+    // opponent position. The unauthenticated spectator upgrade must fail
+    // CLOSED rather than replaying those events or legacy 81-cell content.
+    const spectatorPath=`/api/arena/matches/${activeId}/ws`;
+    const blockedSpectator=await rawUpgradeStatus(
+      port,"intentionally-not-an-agent",spectatorPath);
+    expect(blockedSpectator).toContain("409");
     bots.forEach(bot=>bot.releaseFirstPlan());
     const [endA, endB] = await Promise.race([
       Promise.all(bots.map(bot => bot.end)),
@@ -212,6 +221,11 @@ test("two real authenticated WebSockets finish a match and fetch persisted repla
     expect(await endStatusRes.json()).toEqual({
       state:"completed",round:null,roundCap:50,
     });
+    // Completed replay must remain available, including to a spectator
+    // without an agent bearer credential.
+    const allowedSpectator=await rawUpgradeStatus(
+      port,"intentionally-not-an-agent",spectatorPath);
+    expect(allowedSpectator).toContain("101");
     const matchRes = await fetch(`${base}/api/arena/matches/${id}`);
     expect(matchRes.status).toBe(200);
     const match = await matchRes.json() as { outcome: string | null; agentAId: number; agentBId: number };

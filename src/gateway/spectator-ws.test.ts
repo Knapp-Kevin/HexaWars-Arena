@@ -2,7 +2,10 @@ import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { buildSpectatorFrameSequence, SpectatorDeps } from "./spectator-ws.ts";
 import { MatchRuntime, getActiveRuntime } from "../orchestrator/match-runner.ts";
 import { openDb, initDb } from "../persistence/db.ts";
-import { saveMatch } from "../persistence/match-store.ts";
+import {
+  saveMatch,appendEvents,updateMatchOutcome,
+} from "../persistence/match-store.ts";
+import {handleSpectatorWs} from "./spectator-ws.ts";
 import type { Database } from "bun:sqlite";
 import type { MatchRecord } from "../shared/types";
 
@@ -23,7 +26,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  for (const id of ["active-match-1", "active-match-2", "status-active-match", "completed-match-1"]) {
+  for (const id of ["active-match-1", "active-match-2", "status-active-match", "completed-match-1", "auth-live-fog-guard"]) {
     getActiveRuntime(id)?.finish();
   }
   db.close();
@@ -74,6 +77,54 @@ describe("buildSpectatorFrameSequence", () => {
     const types = frames!.map((f) => JSON.parse(f).type);
     expect(types).toContain("MATCH_HELLO");
     expect(types).toContain("MATCH_STATE");
+  });
+
+  test("unfinished authoritative PvP is private even when legacy runtime and raw events exist",async()=>{
+    const id="auth-live-fog-guard";
+    const rec:MatchRecord={
+      id,operatorAId:1,operatorBId:2,agentAId:1,agentBId:2,
+      originTag:"ladder",outcome:null,createdAt:Date.now(),
+    };
+    saveMatch(db,rec);
+    // An append-only match event may contain a location concealed from
+    // the opposing seat. The public spectator endpoint must not publish
+    // such entries before the authoritative outcome is finalized.
+    const secret="HIDDEN-UNIT-POSITION:5,-3,-2";
+    appendEvents(db,id,[{
+      seq:0,eventType:"unit_moved",
+      payload:JSON.stringify({unitId:"private-scout",agent:"A",
+        hidden:secret,from:{q:5,r:-3,s:-2}}),
+      ts:Date.now(),
+    }]);
+    new MatchRuntime(id,"archived-rules-do-not-override-real-match",
+      "playerA","playerB");
+    expect(buildSpectatorFrameSequence({db},id)).toBeNull();
+    let upgrades=0;
+    const server={upgrade:()=>{upgrades++;return true;}};
+    const req=new Request(`http://arena.test/api/arena/matches/${id}/ws`,{
+      headers:{Upgrade:"websocket"},
+    });
+    const blocked=await handleSpectatorWs(req,server,id,{db});
+    expect(blocked?.status).toBe(409);
+    expect(await blocked!.json()).toEqual({error:"match_in_progress"});
+    expect(upgrades).toBe(0);
+    expect((await handleSpectatorWs(req,server,"unknown-pvp",{db}))?.status)
+      .toBe(404);
+    expect(upgrades).toBe(0);
+    // Outcome is a durable state change: only now is archived/replay
+    // projection authorized, and it must take precedence over a legacy
+    // in-memory runtime whose board and rules were entirely different.
+    updateMatchOutcome(db,id,"A_win",1,"ladder");
+    const frames=buildSpectatorFrameSequence({db},id);
+    expect(frames).not.toBeNull();
+    const decoded=frames!.map(f=>JSON.parse(f));
+    expect(decoded[0].type).toBe("MATCH_HELLO");
+    expect(decoded.at(-1)?.type).toBe("MATCH_END");
+    expect(JSON.stringify(decoded)).toContain(secret);
+    expect(decoded[0].projection.board.cells).toEqual([]);
+    const accepted=await handleSpectatorWs(req,server,id,{db});
+    expect(accepted).toBeUndefined();
+    expect(upgrades).toBe(1);
   });
 
   test("falls back to DB path for completed match with no active runtime", () => {

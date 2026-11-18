@@ -47,26 +47,31 @@ export function buildSpectatorFrameSequence(
   deps: SpectatorDeps,
   matchId: string,
 ): string[] | null {
-  // Active match: use runtime truth
-  const runtime = getActiveRuntime(matchId);
-  if (runtime) {
-    const snapshot = runtime.getSpectatorSnapshot();
-    const input = adaptSpectatorSnapshot(snapshot);
-    const projection = projectPublicMatch(input);
+  // Authoritative, persisted PvP matches take precedence over the legacy
+  // spectator-only MatchRuntime. Intermediate event payloads include raw
+  // unit movement/attacks and can reveal positions hidden by seat fog.
+  // No delayed/redacted spectator projection exists yet: fail closed until
+  // the match outcome is durably final. Never infer a finished game merely
+  // from the presence of a match record.
+  const match = getMatch(deps.db, matchId);
+  if (match) {
+    if (match.outcome === null) return null;
+    const events = Array.from(streamEvents(deps.db, matchId));
+    const handles = getOperatorHandles(deps.db, matchId);
+    const projection = projectLiveSpectatorMatch({
+      match, operatorA: handles.operatorA, operatorB: handles.operatorB, events,
+    });
     return buildSpectatorFrames(projection).map((frame) => JSON.stringify(frame));
   }
 
-  // Completed/replay match: fall back to DB path
-  const match = getMatch(deps.db, matchId);
-  if (!match) return null;
-  const events = Array.from(streamEvents(deps.db, matchId));
-  const handles = getOperatorHandles(deps.db, matchId);
-  const projection = projectLiveSpectatorMatch({
-    match,
-    operatorA: handles.operatorA,
-    operatorB: handles.operatorB,
-    events,
-  });
+  // Historical in-memory seeded-demo fixtures are not authoritative live
+  // operator matches. Preserve their existing spectator projection until
+  // the legacy simulator can be retired from the replay/test surface.
+  const runtime = getActiveRuntime(matchId);
+  if (!runtime) return null;
+  const snapshot = runtime.getSpectatorSnapshot();
+  const input = adaptSpectatorSnapshot(snapshot);
+  const projection = projectPublicMatch(input);
   return buildSpectatorFrames(projection).map((frame) => JSON.stringify(frame));
 }
 
@@ -78,6 +83,17 @@ export function handleSpectatorWs(
 ): Response | undefined {
   if (!req.headers.get("upgrade")?.toLowerCase().includes("websocket")) {
     return new Response("Expected WebSocket upgrade", { status: 426 });
+  }
+
+  // Do not even attempt an upgrade (or materialize append-only events)
+  // while a real 5v5 match is unfinalized. Distinguish this from a missing
+  // match without revealing any sealed plan, hidden position or seed.
+  const authoritative=getMatch(deps.db,matchId);
+  if(authoritative && authoritative.outcome===null){
+    return new Response(JSON.stringify({error:"match_in_progress"}),{
+      status:409,
+      headers:{"content-type":"application/json"},
+    });
   }
 
   const frames = buildSpectatorFrameSequence(deps, matchId);
