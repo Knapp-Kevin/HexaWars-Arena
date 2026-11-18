@@ -57,3 +57,41 @@ deployment is exchanged.
 The frozen `resolveBids`, historical match IDs, v1 and v2 combat
 economies and public UI are untouched by this audit. Any remedial
 tie-break / side-bias rule must be **versioned** after source evidence.
+
+
+## Observed 32-seed × two-seat results
+
+The complete compiled-browser and real-Chrome qualification on PR #42
+([run 44331324316](https://github.com/Knapp-Kevin/HexaWars-Arena/actions/runs/44331324316))
+recorded **64 completed games per economy**, same starting map seed and
+the same deterministic initiative coin within each normal/swapped pair:
+
+| Metric | Classic v1 | Maneuver v2 |
+| --- | ---: | ---: |
+| A wins / B wins | 36 / 28 | 32 / 32 |
+| Normal A / B | 19 / 13 | 18 / 14 |
+| Swapped A / B | 17 / 15 | 14 / 18 |
+| Physical left / right | 34 / 30 | 36 / 28 |
+| Tied bid rounds | 744 | 841 |
+| Tied initiative first A / B | **377 / 367** | **420 / 421** |
+| Higher-bid initiative first A / B | 168 / 173 | 231 / 184 |
+| Total AP bid A / B | 799 / 804 | 1012 / 954 |
+| Orders issued A / B | 1410 / 1404 | 2377 / 2411 |
+| Average match rounds | 16.95 | 19.63 |
+| Same command-seat winner in pair | 12 | 8 |
+| Opposite command-seat winner in pair | 20 | 24 |
+
+These samples do **not** reproduce a severe deterministic tie-priority bias.
+Both economy profiles exhibited close-to-even A/B tie priority, while v2
+wins were exactly even. The earlier Classic 48-seed result (A 38 / B 9 /
+draw 1) is **not representative enough to be a diagnosis**: different
+seeds produce different observed matchup outcomes. The controlled
+experiment identifies no justification for silently rewriting the
+frozen tie-break.
+
+Physical-left results still vary (34/30 and 36/28). With only 32 paired
+seeds per profile and shared bot heuristics, this is **not** proof of
+a physical-map advantage either. The next high-value work is exact
+five-role mechanics, working objectives, faithful LOS, and larger
+multi-policy, genuinely human-played qualification. Keep the economics
+prototype unranked.
