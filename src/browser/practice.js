@@ -152,6 +152,7 @@ function on3DHex(q,r){
   const cell=current.board.find(c=>c.q===q&&c.r===r);
   if(!cell)return;
   const piece=current.units.find(u=>u.q===q&&u.r===r);
+  if(piece?.side==="A"){void selectUnit(piece,true);return;}
   const choice=options.find(a=>a.to.q===q&&a.to.r===r);
   clickCell(cell,piece,choice);
 }
