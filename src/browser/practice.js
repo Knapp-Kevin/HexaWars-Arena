@@ -259,13 +259,15 @@ async function selectUnit(unit){
   if(busy||current?.ended)return;
   updateBusy(true);status("");
   try{
-    const reply=await request("SELECT",{unitId:unit.id});
+    const reply=await request("SELECT",{unitId:unit.id,orders});
     selectedId=unit.id;queued=null;options=reply.legal??[];
     el.selected.textContent=unit.type.toUpperCase()+" · "+unit.hp+" HP";
     el.command.textContent=options.length?"Choose a highlighted hex":"No legal orders";
     el.instruction.textContent=options.length?
-      "Move "+unit.moveRange+" hexes via clear terrain · Attack range "+
-        unit.attackRange+". Queue either or both free slots.":
+      (orders.move?.unitId===unit.id
+        ? "Move queued. Highlighted attacks use the planned destination. Visible enemies only."
+        : "Move "+unit.moveRange+" hexes via clear terrain · Attack range "+
+          unit.attackRange+". Queue either or both free slots."):
       "No valid move or visible attack. Select another squad.";
     draw();sync3D();
   }catch(e){status(String(e?.message||e));}
@@ -282,9 +284,20 @@ function clickCell(cell,piece,choice){
       updateBusy(true);
       try{
         await request("PREVIEW",{orders:revised});
+        // A planned move may bring a known enemy into range. Requery the
+        // authoritative Worker before revealing post-move attack highlights.
+        const refreshed=choice.kind==="move" && selectedId
+          ? await request("SELECT",{unitId:selectedId,orders:revised})
+          : null;
         orders=revised;queued=candidate;
+        if(refreshed)options=refreshed.legal??[];
         el.command.textContent=choice.kind==="attack"?"Attack queued":"Move queued";
-        status("Order queued. Add the other action or resolve your round.");
+        if(choice.kind==="move"){
+          el.instruction.textContent="Move queued. Highlighted attacks use the planned destination. Visible enemies only.";
+        }
+        status(choice.kind==="move"
+          ? "Move queued. Now add an attack, or resolve your round."
+          : "Attack queued. You can still revise orders before resolving.");
         showOrders();draw();sync3D();
       }catch(error){
         status(String(error?.message??error));
@@ -323,13 +336,35 @@ el.changeArena.addEventListener("click",()=>{
   el.start.focus();
 });
 el.commit.addEventListener("click",()=>{void advance({...orders});});
-el.clearMove.addEventListener("click",()=>{
-  if(busy)return;
-  orders.move=null;
-  queued=orders.attack;
-  showOrders();updateBusy(false);draw();sync3D();
-  status("Move cleared.");
-});
+el.clearMove.addEventListener("click",()=>{void (async()=>{
+  if(busy||!current)return;
+  updateBusy(true);
+  try{
+    const next={...orders,move:null};
+    let removedAttack=false;
+    try{
+      await request("PREVIEW",{orders:next});
+    }catch{
+      // An attack that only became legal from the planned destination must
+      // not remain in a hidden, impossible order slot after clearing the move.
+      next.attack=null;
+      await request("PREVIEW",{orders:next});
+      removedAttack=true;
+    }
+    const refreshed=selectedId
+      ? await request("SELECT",{unitId:selectedId,orders:next})
+      : null;
+    orders=next;
+    queued=orders.attack;
+    if(refreshed)options=refreshed.legal??[];
+    el.command.textContent=options.length?"Choose a highlighted hex":"Choose a squad";
+    showOrders();draw();sync3D();
+    status(removedAttack
+      ? "Move cleared. Its dependent attack was also cleared."
+      : "Move cleared.");
+  }catch(error){status(String(error?.message??error));}
+  finally{updateBusy(false);}
+})();});
 el.clearAttack.addEventListener("click",()=>{
   if(busy)return;
   orders.attack=null;
