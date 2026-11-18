@@ -132,8 +132,10 @@ test("canonical dead-unit stalemate seed terminates before the 50-round cap",()=
   }
   assert(game.finished,"Expected a concluded match");
   assert(game.round<50,`Dead units extended match to round ${game.round}`);
-  assert.equal(game.state.units.filter(u=>u.hp>0).length,
-    game.state.units.filter(u=>u.hp>0).length);
+  const living=game.state.units.filter(u=>u.hp>0);
+  if(game.finished.winner==="draw")assert.equal(living.length,0);
+  else assert(living.some(u=>u.owner===game.finished.winner),
+    "Winning side has no surviving combatants");
   console.log("ZERO HP FIX seed",game.seed,"completed after",game.round,
     "rounds",game.finished);
 });
