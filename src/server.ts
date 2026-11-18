@@ -16,8 +16,7 @@ import { getOperatorByToken } from "./identity/operator.ts";
 import { LiveConnections } from "./gateway/live-connections.ts";
 import { handleSpectatorWs, matchSpectatorPath, spectatorWebSocket } from "./gateway/spectator-ws.ts";
 import type { SpectatorSocketData } from "./gateway/spectator-ws.ts";
-import { getMatch } from "./persistence/match-store.ts";
-import { getActiveRuntime } from "./orchestrator/match-runner.ts";
+
 
 const app = new Hono();
 
@@ -94,32 +93,13 @@ startMatchmaker({
   intervalMs: 1000,
 });
 
-mount(app, db, { matchQueue, presence: presenceTracker, status: matchmakerStatus });
+mount(app, db, {
+  matchQueue,presence:presenceTracker,status:matchmakerStatus,
+  activeRound:(matchId)=>live.activeRound(matchId),
+});
 serveStatic(app);
 
 app.get("/", (c) => c.json({ service: "arena", status: "online", version: "0.1.0" }));
-
-// GET /api/arena/matches/:matchId/status — live vs completed state
-app.get("/api/arena/matches/:matchId/status", (c) => {
-  const { matchId } = c.req.param();
-  const runtime = getActiveRuntime(matchId);
-  if (runtime) {
-    return c.json({
-      state: "active",
-      round: runtime.round,
-      roundCap: runtime.state.roundCap,
-    });
-  }
-  const match = getMatch(db, matchId);
-  if (match) {
-    return c.json({
-      state: "completed",
-      round: 0,
-      roundCap: 0,
-    });
-  }
-  return c.json({ error: "not_found" }, 404);
-});
 
 type AgentSocketData = { kind: "agent"; operatorId: number };
 type ArenaSocketData = AgentSocketData | SpectatorSocketData;

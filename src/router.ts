@@ -32,6 +32,8 @@ interface MountOpts {
   matchQueue?: MatchQueue;
   presence?: PresenceTracker;
   status?: MatchmakerStatus;
+  /** Read-only active state of the real Frontier live channels, never demos. */
+  activeRound?: (matchId:string)=>number|null;
 }
 
 export function mount(app: Hono, db: Database, opts: MountOpts = {}): void {
@@ -256,7 +258,7 @@ export function mount(app: Hono, db: Database, opts: MountOpts = {}): void {
 
   mountAgentRoutes(app, db);
   mountRegisterRoutes(app, db);
-  mountMatchRoutes(app, db);
+  mountMatchRoutes(app, db, {activeRound:opts.activeRound});
   mountTournamentRoutes(app, db);
   mountLeaderboardRoutes(app, db);
   mountChallengeRoutes(app, db);

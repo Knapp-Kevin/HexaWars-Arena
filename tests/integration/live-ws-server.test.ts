@@ -5,7 +5,14 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-type Bot = { socket: WebSocket; ready: Promise<void>; end: Promise<Record<string, unknown>>; frames: Record<string, unknown>[] };
+type Bot = {
+  socket:WebSocket;
+  ready:Promise<void>;
+  end:Promise<Record<string,unknown>>;
+  firstState:Promise<void>;
+  releaseFirstPlan:()=>void;
+  frames:Record<string,unknown>[];
+};
 
 async function availablePort(): Promise<number> {
   const server = createServer();
@@ -56,7 +63,7 @@ async function rawUpgradeStatus(port: number, token: string): Promise<string> {
   });
 }
 
-function openBot(url: string, token: string): Bot {
+function openBot(url: string, token: string, holdFirstPlan=false): Bot {
   // Bun's header-bearing WebSocket constructor is a runtime extension absent
   // from the standard DOM constructor type. Real acceptance verifies it.
   const BunHeaderWebSocket = WebSocket as unknown as new (
@@ -64,6 +71,19 @@ function openBot(url: string, token: string): Bot {
   ) => WebSocket;
   const socket = new BunHeaderWebSocket(url, { headers: { Authorization: `Bearer ${token}` } });
   const frames: Record<string, unknown>[] = [];
+  let seenState=false,firstStateReady=()=>{};
+  const firstState=new Promise<void>(resolve=>{firstStateReady=resolve;});
+  let heldPlan:Record<string,unknown>|null=null;
+  const submit=(frame:Record<string,unknown>)=>socket.send(JSON.stringify({
+    type:"PLAN",matchId:frame.matchId,turn:frame.turn,
+    protocolVersion:frame.protocolVersion,
+    rulesVersion:frame.rulesVersion,
+    plan:{bid:0,extras:[]},
+  }));
+  const releaseFirstPlan=()=>{
+    if(!heldPlan)throw new Error("No held first STATE to release");
+    submit(heldPlan);heldPlan=null;
+  };
   const ready = new Promise<void>((resolve, reject) => {
     socket.addEventListener("open", () => resolve(), { once: true });
     socket.addEventListener("error", (event) => reject(new Error(`agent WS upgrade failed: ${String((event as ErrorEvent).message ?? "unknown")}`)), { once: true });
@@ -73,12 +93,12 @@ function openBot(url: string, token: string): Bot {
       const frame = JSON.parse(String(event.data)) as Record<string, unknown>;
       frames.push(frame);
       if (frame.type === "STATE") {
-        socket.send(JSON.stringify({
-          type: "PLAN", matchId: frame.matchId, turn: frame.turn,
-          protocolVersion:frame.protocolVersion,
-          rulesVersion:frame.rulesVersion,
-          plan: { bid: 0, extras: [] },
-        }));
+        if(!seenState){
+          seenState=true;
+          firstStateReady();
+          if(holdFirstPlan){heldPlan=frame;return;}
+        }
+        submit(frame);
       }
       if (frame.type === "END") resolve(frame);
       if (frame.type === "ERROR" && frame.code === "match_runtime_failed") reject(new Error("match runtime failed"));
@@ -87,7 +107,7 @@ function openBot(url: string, token: string): Bot {
   });
   // The runner can reject on close before a caller attaches the match completion await.
   void end.catch(() => {});
-  return { socket, ready, end, frames };
+  return {socket,ready,end,firstState,releaseFirstPlan,frames};
 }
 
 test("two real authenticated WebSockets finish a match and fetch persisted replay", async () => {
@@ -125,7 +145,10 @@ test("two real authenticated WebSockets finish a match and fetch persisted repla
     expect(handshakeStatus).toContain("101");
     await Bun.sleep(100);
     const wsUrl = `ws://127.0.0.1:${port}/api/arena/agents/ws`;
-    bots.push(openBot(wsUrl, tokenA), openBot(wsUrl, tokenB));
+    // Hold both first sealed plans while fetching the real public match
+    // status. An active match MUST NOT be labeled completed just because
+    // it already has a persisted SQLite row.
+    bots.push(openBot(wsUrl, tokenA,true), openBot(wsUrl, tokenB,true));
     await Promise.all(bots.map(b => b.ready));
 
     async function enqueue(token: string) {
@@ -136,6 +159,21 @@ test("two real authenticated WebSockets finish a match and fetch persisted repla
     }
     await enqueue(tokenA);
     await enqueue(tokenB);
+    await Promise.race([
+      Promise.all(bots.map(bot=>bot.firstState)),
+      Bun.sleep(5000).then(()=>{throw new Error("real match did not send two first STATE frames");}),
+    ]);
+    const activeId=String(bots[0].frames.find(f=>f.type==="HELLO")?.matchId);
+    expect(activeId).not.toBe("undefined");
+    for(const bot of bots){
+      expect(bot.frames.find(f=>f.type==="HELLO")?.matchId).toBe(activeId);
+    }
+    const statusRes=await fetch(`${base}/api/arena/matches/${activeId}/status`);
+    expect(statusRes.status).toBe(200);
+    const status=await statusRes.json() as Record<string,unknown>;
+    expect(status).toEqual({state:"active",round:0,roundCap:50});
+    expect(JSON.stringify(status)).not.toContain("seed");
+    bots.forEach(bot=>bot.releaseFirstPlan());
     const [endA, endB] = await Promise.race([
       Promise.all(bots.map(bot => bot.end)),
       Bun.sleep(15000).then(() => { throw new Error("match did not complete within 15s"); }),
@@ -169,6 +207,11 @@ test("two real authenticated WebSockets finish a match and fetch persisted repla
       expect(JSON.stringify(bot.frames.filter(f => f.type !== "END"))).not.toContain("match_seed_revealed");
     }
     const id = String(endA.matchId);
+    const endStatusRes=await fetch(`${base}/api/arena/matches/${id}/status`);
+    expect(endStatusRes.status).toBe(200);
+    expect(await endStatusRes.json()).toEqual({
+      state:"completed",round:null,roundCap:50,
+    });
     const matchRes = await fetch(`${base}/api/arena/matches/${id}`);
     expect(matchRes.status).toBe(200);
     const match = await matchRes.json() as { outcome: string | null; agentAId: number; agentBId: number };

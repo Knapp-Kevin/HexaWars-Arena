@@ -2,8 +2,12 @@ import type { Database } from "bun:sqlite";
 import type { Hono } from "hono";
 import { getMatch, listMatchesByOperator, streamEvents } from "../persistence/match-store";
 import type { MatchEvent } from "../shared/types";
+import {ROUND_CAP} from "../engine/constants.ts";
 
-export function mountMatchRoutes(app: Hono, db: Database): void {
+export function mountMatchRoutes(
+  app:Hono,db:Database,
+  opts:{activeRound?:(matchId:string)=>number|null}={},
+):void {
   app.get("/api/arena/matches", (c) => {
     const rawLimit = c.req.query("limit");
     const limit = rawLimit ? Math.min(Math.max(parseInt(rawLimit, 10), 1), 100) : 20;
@@ -37,23 +41,17 @@ export function mountMatchRoutes(app: Hono, db: Database): void {
   });
 
   app.get("/api/arena/matches/:id/status", (c) => {
-    const matchId = c.req.param("id");
-    const { getActiveRuntime } = require("../orchestrator/match-runner.js");
-    const runtime = getActiveRuntime(matchId);
-    if (runtime) {
-      return c.json({
-        state: "active",
-        round: runtime.round,
-        roundCap: runtime.state.roundCap,
-      });
+    const matchId=c.req.param("id");
+    const liveRound=opts.activeRound?.(matchId)??null;
+    if(liveRound!==null){
+      return c.json({state:"active",round:liveRound,roundCap:ROUND_CAP});
     }
-    const rec = getMatch(db, matchId);
-    if (!rec) return c.json({ error: "not_found" }, 404);
-    return c.json({
-      state: rec.outcome ? "completed" : "pending",
-      round: 0,
-      roundCap: 0,
-    });
+    const rec=getMatch(db,matchId);
+    if(!rec)return c.json({error:"not_found"},404);
+    if(rec.outcome===null){
+      return c.json({state:"unresolved",round:null,roundCap:ROUND_CAP});
+    }
+    return c.json({state:"completed",round:null,roundCap:ROUND_CAP});
   });
 
   app.get("/api/arena/operators/:handle/matches", (c) => {

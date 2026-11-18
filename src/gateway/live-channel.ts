@@ -55,6 +55,11 @@ function planShape(value: unknown): value is FrontierRoundPlan {
 export class LiveAgentChannel implements AgentChannel {
   closed = false;
   private turn: number | null = null;
+  /** Public round index most recently sent to this authenticated competitor.
+   * Unlike 'turn', this survives a consumed PLAN until the match ends.
+   */
+  private lastReportedRound: number | null = null;
+  get latestReportedRound(): number | null { return this.lastReportedRound; }
   private buffered: FrontierRoundPlan | null = null;
   private pending: { resolve: (plan: FrontierRoundPlan) => void; reject: (err: Error) => void } | null = null;
   private closedCallback: (() => void) | undefined;
@@ -82,6 +87,7 @@ export class LiveAgentChannel implements AgentChannel {
       }:{}),
       stances: state.stances, reserves: state.reserves,
     }));
+    this.lastReportedRound=state.turn;
   }
 
   receivePlan(): Promise<FrontierRoundPlan> {

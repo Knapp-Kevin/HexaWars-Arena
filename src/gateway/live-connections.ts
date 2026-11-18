@@ -17,6 +17,22 @@ export class LiveConnections {
 
   has(operatorId: number): boolean { return this.connected.has(operatorId); }
 
+  /**
+   * The active matchmaker binds *real* socket channels, not the archived
+   * seeded spectator MatchRuntime. Return a public round index only while
+   * a channel is actually bound to this exact match. No hidden board, seed,
+   * operators, or plans leave this status interface.
+   */
+  activeRound(matchId: string): number | null {
+    let latest: number | null = null;
+    for (const entry of this.connected.values()) {
+      if (entry.channel?.matchId !== matchId || entry.channel.closed) continue;
+      const turn=entry.channel.latestReportedRound ?? 0;
+      latest=latest===null?turn:Math.max(latest,turn);
+    }
+    return latest;
+  }
+
   available(operatorId: number): boolean {
     const entry = this.connected.get(operatorId);
     return Boolean(entry && !entry.channel);
