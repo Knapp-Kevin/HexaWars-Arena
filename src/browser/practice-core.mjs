@@ -83,10 +83,9 @@ export function practiceView(game,side="A"){
       id:u.id,side:u.owner,q:u.position.q,r:u.position.r,
       hp:u.hp,strength:u.strength,type:u.type,
     })),
-    blue:own.filter(u=>u.owner==="A").length+
-      (side==="B"?opponents.filter(u=>u.owner==="A").length:0),
-    red:own.filter(u=>u.owner==="B").length+
-      (side==="A"?opponents.filter(u=>u.owner==="B").length:0),
+    // Public scoreboard totals reveal counts, not concealed positions/HP.
+    blue:game.state.units.filter(u=>u.owner==="A"&&u.hp>0).length,
+    red:game.state.units.filter(u=>u.owner==="B"&&u.hp>0).length,
     ended:victory?{...victory}:null,
   };
 }
