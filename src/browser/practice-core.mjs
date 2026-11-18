@@ -374,6 +374,41 @@ export function chooseBotRoundOrders(game,side="B"){
   }
   if(candidates.length)result[complement]=candidates[0];
 
+  if(game.economy==="maneuver-v2"){
+    // The same number of squad orders is available to human and AI. A
+    // second move uses a DIFFERENT unit and cannot silently overwrite or
+    // collide with the first reserved move. Each candidate is checked
+    // through the exact versioned plan validator before being selected.
+    const moves=own.flatMap(u=>legalCommands(game,side,u.id))
+      .filter(c=>c.kind==="move"&&c.unitId!==result.move?.unitId)
+      .filter(c=>!result.move||!exactlySame(c.to,result.move.to))
+      .filter(c=>{
+        const unit=own.find(u=>u.id===c.unitId);
+        const previous=trail.filter(x=>x.unitId===c.unitId).at(-1);
+        return unit && !(previous &&
+          previous.from===key(c.to) &&
+          previous.to===key(unit.position));
+      });
+    const middle={q:0,r:0,s:0};
+    moves.sort((a,b)=>
+      (distance(own.find(u=>u.id===b.unitId).position,middle)-
+        distance(b.to,middle))-
+      (distance(own.find(u=>u.id===a.unitId).position,middle)-
+        distance(a.to,middle))||
+      a.unitId.localeCompare(b.unitId)||a.to.q-b.to.q||a.to.r-b.to.r);
+    for(const move2 of moves){
+      try{
+        checkedPlan(game,side,{...result,move2,bid:0});
+        result.move2=move2;
+        break;
+      }catch{
+        // Live occupancy and source-identity conflicts make candidates
+        // ineligible. A missing second move is always better than a forged
+        // command accepted by a special-case AI path.
+      }
+    }
+  }
+
   // Opt-in unranked opponent profile. The legacy scripted house bot always
   // bids zero and has an asymmetric Red-only holding rule; preserve those
   // historical results under legacy-v1, but let the new profile compete for
