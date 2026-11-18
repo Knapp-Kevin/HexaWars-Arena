@@ -48,6 +48,26 @@ describe("checkVictory", () => {
       expect(result.reason).toBe("elimination");
     });
 
+    it("zero-HP opponents cannot prevent an elimination victory", () => {
+      const deadB = { ...makeUnit("B", "dead-b"), hp: 0 };
+      const state = makeState({
+        units: [makeUnit("A", "a1"), deadB],
+        visible: [makeCell(null)],
+      });
+      expect(checkVictory(state)).toEqual({ winner: "A", reason: "elimination" });
+    });
+
+    it("two zero-HP armies are a mutual elimination draw, not a 50-round stall", () => {
+      const state = makeState({
+        units: [
+          { ...makeUnit("A", "dead-a"), hp: 0 },
+          { ...makeUnit("B", "dead-b"), hp: 0 },
+        ],
+        visible: [makeCell(null)],
+      });
+      expect(checkVictory(state)).toEqual({ winner: "draw", reason: "mutual_elimination" });
+    });
+
     it("draw when both sides have no units", () => {
       const state = makeState({ units: [], visible: [makeCell(null)] });
       const result = checkVictory(state);

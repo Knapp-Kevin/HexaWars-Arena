@@ -12,8 +12,11 @@ export function checkVictory(state: MatchState): VictoryResult {
   const units = state.units;
   const visible = state.visible;
 
-  const unitCountA = units.filter((u) => u.owner === "A").length;
-  const unitCountB = units.filter((u) => u.owner === "B").length;
+  // Some interrupt/reserve branches retain zero-HP records for event history.
+  // They are NOT living units: counting them permits zombie victories and
+  // indefinite pass rounds after every remaining squad has been defeated.
+  const unitCountA = units.filter((u) => u.owner === "A" && u.hp > 0).length;
+  const unitCountB = units.filter((u) => u.owner === "B" && u.hp > 0).length;
 
   if (unitCountA === 0 && unitCountB === 0) {
     return { winner: "draw", reason: "mutual_elimination" };
