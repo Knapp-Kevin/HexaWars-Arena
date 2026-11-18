@@ -5,6 +5,7 @@ import { applyCarryover, applyEndOfRound, deductBid } from "./round-state";
 import { resolveExtras } from "./round-resolver/extras.ts";
 import { resolveReserveTriggers } from "./round-resolver/triggers.ts";
 import { RANGE } from "./constants";
+import { distance } from "./coords";
 import { checkVictory } from "./victory";
 import type {
   RunRoundInput,
@@ -199,8 +200,14 @@ function doAttack(
   const attacker = state.units.find((u) => u.id === attackerUnitId && u.owner === agent);
   if (!attacker) return null;
 
+  // A previously valid same-unit move may be blocked by the other side's
+  // higher-priority move. Resolve against the attacker's LIVE position rather
+  // than letting a planned post-move target become an impossible ranged hit.
+  // This is a dynamic collision/retarget condition, not a second plan validator.
+  const range = RANGE[attacker.type] ?? 1;
   const directTarget = state.units.find(
-    (u) => u.owner !== agent && samePos(u.position, originalTarget),
+    (u) => u.owner !== agent && samePos(u.position, originalTarget) &&
+      distance(attacker.position, u.position) <= range,
   );
 
   let defender: Unit | null = directTarget ?? null;
@@ -209,9 +216,12 @@ function doAttack(
 
   if (!defender) {
     const enemies = state.units.filter((u) => u.owner !== agent);
-    const range = RANGE[attacker.type] ?? 1;
     defender = findRetarget({ attacker, originalTarget, enemyUnits: enemies, range });
-    if (!defender) return { state, events: [] };
+    if (!defender) return { state, events: [{
+      type: "action_wasted",
+      payload: { agent, attackerUnitId, originalTarget, reason: "no_target_in_range" },
+      timestamp: 0,
+    }] };
     retargeted = true;
     aimPenalty = (attacker.weight ?? 2) * 0.2;
   }
