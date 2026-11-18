@@ -125,12 +125,27 @@ function planForAction(unit,action){
   }
   return {bid:0,extras:[]};
 }
-export function legalCommands(game,side,unitId){
+export function legalCommands(game,side,unitId,stagedMove=null){
   if(game.finished||!SIDES.has(side))return [];
   const unit=ownUnits(game,side).find(u=>u.id===unitId);
   if(!unit)return [];
+  const budget=side==="A"?game.budgetA:game.budgetB;
   const occupied=new Set(game.state.units.map(u=>key(u.position)));
   const options=[];
+  // A queued free move changes the selected squad's firing origin, but
+  // does NOT change what enemies are currently visible through fog.
+  // Reject unverified projected positions rather than previewing attacks
+  // from a fictional hex.
+  let stagedOrigin=unit.position,stagedFragment=null;
+  if(stagedMove?.kind==="move" && stagedMove.unitId===unit.id){
+    if(!stagedMove.to||!Number.isSafeInteger(stagedMove.to.q)||
+      !Number.isSafeInteger(stagedMove.to.r)||!Number.isSafeInteger(stagedMove.to.s)||
+      stagedMove.to.q+stagedMove.to.r+stagedMove.to.s!==0)return [];
+    const trial=planForAction(unit,stagedMove);
+    if(!validateRoundPlan(trial,side,game.state,budget).ok)return [];
+    stagedOrigin=stagedMove.to;
+    stagedFragment=trial.freeMove;
+  }
   for(const cell of game.state.visible){
     const to=cell.position;
     if((cell.terrain!=="mountain"&&cell.terrain!=="water") &&
@@ -141,10 +156,11 @@ export function legalCommands(game,side,unitId){
     }
   }
   for(const enemy of knownEnemyUnits(game,side)){
-    if(distance(unit.position,enemy.position) <= (RANGE[unit.type]??1)){
+    if(distance(stagedOrigin,enemy.position) <= (RANGE[unit.type]??1)){
       const cmd={kind:"attack",unitId,to:clonePos(enemy.position)};
-      if(validateRoundPlan(planForAction(unit,cmd),side,game.state,
-        side==="A"?game.budgetA:game.budgetB).ok)options.push(cmd);
+      const trial=planForAction(unit,cmd);
+      if(stagedFragment)trial.freeMove=stagedFragment;
+      if(validateRoundPlan(trial,side,game.state,budget).ok)options.push(cmd);
     }
   }
   return options;
@@ -264,21 +280,12 @@ function checkedPlan(game,side,input){
       throw new Error("Invalid hex coordinates");
     const unit=ownUnits(game,side).find(u=>u.id===choice.unitId);
     if(!unit)throw new Error("Not one of your units");
-    const valid=legalCommands(game,side,unit.id).find(x=>
+    const valid=legalCommands(game,side,unit.id,orders.move).find(x=>
       x.kind===kind&&exactlySame(x.to,to));
     if(!valid)throw new Error("That "+kind+" is not legal this round");
     const fragment=planForAction(unit,valid);
     if(kind==="move")plan.freeMove=fragment.freeMove;
     else plan.freeAction=fragment.freeAction;
-  }
-  if(plan.freeMove&&plan.freeAction&&
-    plan.freeMove.unitId===plan.freeAction.unitId){
-    const unit=ownUnits(game,side).find(u=>u.id===plan.freeMove.unitId);
-    // The current resolver fires freeMove before freeAction. Prevent a direct
-    // attack from magically striking a remote target after that move.
-    // Post-move-only targeting needs a separately qualified contract upgrade.
-    if(distance(plan.freeMove.to,plan.freeAction.to) > RANGE[unit.type])
-      throw new Error("That squad would leave attack range after moving");
   }
   const result=validateRoundPlan(plan,side,game.state,budget);
   if(!result.ok)throw new Error("Plan rejected: "+result.reason);
