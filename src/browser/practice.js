@@ -39,6 +39,7 @@ function on3DHex(q,r){
 }
 function show2D(reason){
   using3D=false;
+  document.body.classList.remove("is-3d");
   scene3D?.deactivate();
   // SVGElement does not consistently implement HTMLElement.hidden in Chrome.
   el.map.removeAttribute("hidden");
@@ -71,6 +72,7 @@ async function toggleView(){
       });
     }
     using3D=true;
+    document.body.classList.add("is-3d");
     el.toggle3D.textContent="2D map";
     el.toggle3D.setAttribute("aria-pressed","true");
     sync3D();
