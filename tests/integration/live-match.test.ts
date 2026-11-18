@@ -3,7 +3,8 @@ import { openDb, initDb } from "../../src/persistence/db.ts";
 import { createOperator } from "../../src/identity/operator.ts";
 import { registerAgentVersion } from "../../src/identity/agent-version.ts";
 import { MatchRunner } from "../../src/runner/runner.ts";
-import { LiveAgentChannel } from "../../src/gateway/live-channel.ts";
+import { LiveAgentChannel,LIVE_PROTOCOL_VERSION } from "../../src/gateway/live-channel.ts";
+import { ACTIVE_FRONTIER_RULES_VERSION } from "../../src/engine/frontier-match.ts";
 import { countEvents, getMatch, streamEvents } from "../../src/persistence/match-store.ts";
 import type { Database } from "bun:sqlite";
 
@@ -38,6 +39,8 @@ describe("live agent channel -> authoritative runner -> SQLite replay", () => {
           if (data.type === "STATE") {
             channel.acceptMessage(JSON.stringify({
               type: "PLAN", matchId, turn: data.turn,
+              protocolVersion:LIVE_PROTOCOL_VERSION,
+              rulesVersion:ACTIVE_FRONTIER_RULES_VERSION,
               plan: { bid: 0, extras: [] },
             }));
           }
@@ -66,6 +69,20 @@ describe("live agent channel -> authoritative runner -> SQLite replay", () => {
     expect(receivedA.length).toBeGreaterThan(0);
     expect(receivedB.length).toBeGreaterThan(0);
     expect(receivedA[0].type).toBe("STATE");
+    expect(receivedA[0].rulesVersion).toBe(ACTIVE_FRONTIER_RULES_VERSION);
+    expect(receivedA[0].protocolVersion).toBe(LIVE_PROTOCOL_VERSION);
+    expect(receivedA[0].maxMoveSlots).toBe(2);
+    expect(receivedB[0].maxMoveSlots).toBe(2);
+    for(const [side,frames] of [["A",receivedA],["B",receivedB]] as const){
+      const first=frames.find(x=>x.type==="STATE")!;
+      const units=first.units as Array<{owner:"A"|"B";type:string}>;
+      expect(units.length).toBe(5);
+      expect(units.every(u=>u.owner===side)).toBe(true);
+      expect(units.map(u=>u.type).sort()).toEqual(
+        ["captain","interceptor","raider","scout","siege"]);
+      expect((first.visible as unknown[]).length).toBeLessThan(127);
+    }
+
     expect(receivedA[0].matchId).toBe(matchId);
     expect(JSON.stringify(receivedA)).not.toContain(seed);
     expect(JSON.stringify(receivedB)).not.toContain(seed);
