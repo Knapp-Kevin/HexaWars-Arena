@@ -1,5 +1,5 @@
 import { describe,expect,test } from "bun:test";
-import { createFrontierRoleMatch,ACTIVE_FRONTIER_RULES_VERSION } from "../../src/engine/frontier-match.ts";
+import { createFrontierObjectiveMatch,ACTIVE_FRONTIER_RULES_VERSION } from "../../src/engine/frontier-match.ts";
 import { newBudget } from "../../src/engine/round-state.ts";
 import { projectSeatObservation } from "../../src/gateway/observation.ts";
 import { LiveAgentChannel,LIVE_PROTOCOL_VERSION } from "../../src/gateway/live-channel.ts";
@@ -9,7 +9,7 @@ import { PresenceTracker } from "../../src/matchmaker/presence.ts";
 const matchId="match-frontier-live-1";
 const pass={bid:0,extras:[]};
 const frame=()=>({
-  state:projectSeatObservation(createFrontierRoleMatch("private-not-public"),
+  state:projectSeatObservation(createFrontierObjectiveMatch("private-not-public"),
     "A","frontier-five-roles-v1"),
   budget:newBudget(),
 });
@@ -32,6 +32,7 @@ describe("live agent channel: one explicit five-role Frontier contract",()=>{
     expect(s.messages[0].rulesVersion).toBe(ACTIVE_FRONTIER_RULES_VERSION);
     expect(s.messages[0].maxMoveSlots).toBe(2);
     expect(s.messages[0].maxFreeAttacks).toBe(1);
+    expect(s.messages[0].objectiveHold).toEqual({a:0,b:0});
     expect(JSON.stringify(s.messages[0])).not.toContain("private-not-public");
     const own=s.messages[0].units as Array<{owner:string;type:string}>;
     expect(own.length).toBe(5);
@@ -115,6 +116,8 @@ describe("live agent channel: one explicit five-role Frontier contract",()=>{
     expect(a.messages[0].boardCells).toBe(127);
     expect(a.messages[0].freeMoves).toBe(2);
     expect(a.messages[0].freeAttacks).toBe(1);
+    expect(a.messages[0].objectiveTarget).toBe(3);
+    expect((a.messages[0].objectiveSites as unknown[]).length).toBe(5);
     expect(JSON.stringify(a.messages[0])).not.toContain("seed");
     expect(live.bind(10,20,"another")).toBeNull();
     live.complete(10,20,matchId,{winnerOperatorId:10,reason:"decisive"});
