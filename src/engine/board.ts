@@ -134,6 +134,55 @@ export function initHexDiskBoard(radius: number = 4, seed: number = 0): HexCell[
 }
 
 /**
+ * The larger human battlefield uses FIVE deployed squads per side. This
+ * versioned formation is deliberately separate from legacy 3-squad matches.
+ * The original five distinct combat roles are not restored by this roster:
+ * scout/infantry/heavy remain the currently executable ruleset.
+ *
+ * Coordinates are deliberately spread over the left flank, with exact
+ * 180-degree counterpart positions for the opponent.
+ */
+export const FRONTIER_STARTS_A = [
+  { q: -5, r: 0, s: 5, type: "scout" },
+  { q: -4, r: -1, s: 5, type: "infantry" },
+  { q: -4, r: 1, s: 3, type: "infantry" },
+  { q: -3, r: -2, s: 5, type: "scout" },
+  { q: -3, r: 2, s: 1, type: "heavy" },
+] as const;
+
+/**
+ * Frontier127-v1: a 127-cell hex disk with strategic, seed-stable features.
+ *
+ * Random terrain is paired under exact 180-degree rotation, not generated
+ * independently on each flank. Center passage, two covered flank routes,
+ * impassable northern/southern obstacles and deployable start zones are
+ * deliberately authored. This is a NEW topology, not an alteration of the
+ * 61-cell or 81-cell historical board and seed/replay contracts.
+ */
+export function initFrontierBoard(seed: number = 0): HexCell[][] {
+  const board = initHexDiskBoard(6, seed);
+  for (const row of board) {
+    for (const cell of row) {
+      const { q, r, s } = cell.position;
+      const canonical = q < 0 || (q === 0 && r <= 0)
+        ? cell.position : { q: -q, r: -r, s: -s };
+      let terrain: HexCell["terrain"] = terrainFor(seed, canonical);
+      // Safe openings and a central lane guarantee both sides can advance.
+      if (r === 0 || (Math.abs(q) >= 3 && Math.abs(r) <= 2) ||
+          (Math.abs(r) === 2 && Math.abs(q) <= 4)) terrain = "plain";
+      // Symmetric cover on the two flank routes and central approach.
+      if ((Math.abs(q) === 2 && Math.abs(r) === 2) ||
+          (Math.abs(q) === 1 && Math.abs(r) === 1)) terrain = "forest";
+      // Obstacles shape tactical approaches without blocking either lane.
+      if (q === 0 && Math.abs(r) === 4) terrain = "mountain";
+      if (Math.abs(q) === 1 && Math.abs(r) === 4) terrain = "water";
+      cell.terrain = terrain;
+    }
+  }
+  return board;
+}
+
+/**
  * Look up a cell by cube coordinate.
  * Returns `undefined` if the coord is outside the board bounds.
  *
