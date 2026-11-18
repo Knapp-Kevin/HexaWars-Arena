@@ -102,7 +102,7 @@
     .three-d-target.select{background:#244e79ec;border:2px solid #9ad1ff;color:#f4faff}
     .three-d-target.move{background:#0c4765de;border:2px solid #bcecff;color:#f2fbff}
     .three-d-target.attack{background:#8f2635ec;border:2px solid #ffb3b9;color:#fff5f5}
-    .three-d-tray{position:absolute;left:9px;right:9px;bottom:62px;z-index:3;pointer-events:auto;display:flex;align-items:center;gap:7px;max-height:64px;padding:7px;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;background:#0a2034ed;border:1px solid #58758d;border-radius:11px;box-shadow:0 5px 20px #0008}
+    .three-d-tray{position:absolute;left:9px;right:9px;top:58px;z-index:3;pointer-events:auto;display:flex;align-items:center;gap:7px;max-height:64px;padding:7px;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;background:#0a2034ed;border:1px solid #58758d;border-radius:11px;box-shadow:0 5px 20px #0008}
     .three-d-tray-choice{flex:0 0 auto;min-width:96px;min-height:44px;white-space:nowrap;padding:7px 12px;font-size:12px;letter-spacing:.01em}
     .three-d-tray-choice{border:1px solid #90b6cb;color:#eaf6ff;background:#22445f}
     .three-d-tray-choice.attack{border-color:#ff868e;background:#7d2937}
@@ -119,8 +119,30 @@
       .game3d-tools button{min-width:38px;min-height:38px}
       .three-d-target{min-width:38px;min-height:38px}
       .three-d-target{display:none!important}
-      .three-d-tray{position:absolute;left:7px;right:7px;bottom:60px;z-index:3;pointer-events:auto;display:flex;align-items:center;gap:7px;max-height:62px;padding:7px;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;background:#0a2034ed;border:1px solid #58758d;border-radius:11px;box-shadow:0 5px 20px #0008}
+      .three-d-tray{position:absolute;left:7px;right:7px;top:51px;z-index:3;pointer-events:auto;display:flex;align-items:center;gap:7px;max-height:62px;padding:7px;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;background:#0a2034ed;border:1px solid #58758d;border-radius:11px;box-shadow:0 5px 20px #0008}
       .three-d-tray-choice{flex:0 0 auto;min-width:96px;min-height:44px;white-space:nowrap;padding:7px 12px;font-size:12px;letter-spacing:.01em}
+    }
+
+    /* Game-first phone HUD: battle and primary actions stay within one screen. */
+    @media(max-width:860px){
+      body.is-3d{padding-bottom:102px}
+      .is-3d .arena{height:clamp(450px,calc(100dvh - 165px),735px);min-height:450px}
+      .is-3d aside>section.panel:first-child{display:none}
+      .is-3d aside .panel.actionbar{
+        position:fixed;left:0;right:0;bottom:0;z-index:9;
+        display:grid;grid-template-columns:1fr 1fr;gap:7px;
+        padding:8px 12px max(8px,env(safe-area-inset-bottom));
+        border-radius:12px 12px 0 0;border:1px solid #56758d;
+        background:#0a1d30f5;box-shadow:0 -7px 28px #0008;
+      }
+      .is-3d aside .panel.actionbar #commit-round,
+      .is-3d aside .panel.actionbar #skip-round{min-height:47px;font-size:13px}
+      .is-3d aside .panel.actionbar .notice{
+        grid-column:1/-1;min-height:0;padding:0;font-size:11px;
+        white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+      }
+      .is-3d aside .panel.actionbar .victory{grid-column:1/-1}
+      .is-3d footer{display:none}
     }
   </style>
   <script type="module" src="./practice.js"></script>
@@ -183,7 +205,7 @@
       </details>
     </aside>
   </main>
-  <footer>LOCAL PRACTICE · Canonical HexaWars rules · Unranked. Choose Verdant 3D for direct tactical markers or switch to the accessible 2D hex map.</footer>
+  <footer>LOCAL PRACTICE · UNRANKED · Play in 3D or use the accessible tactical map.</footer>
 </div>
 </body>
 </html>
