@@ -527,3 +527,94 @@ test("Frontier127 bot matches stay bounded and complete with real movement and a
     ...results,meanRounds:Number((results.rounds/results.matches).toFixed(2)),
   }));
 });
+
+test("PVP matchup baseline: both seats receive matched five-squad armies, legal commands and equal starting AP",()=>{
+  const signature=units=>units.map(u=>({
+    type:u.type,hp:u.hp,strength:u.strength,weight:u.weight,
+  })).sort((a,b)=>a.type.localeCompare(b.type)||a.hp-b.hp||a.strength-b.strength);
+  for(let i=0;i<64;i++){
+    const game=newPractice("fair-start-"+String(i).padStart(3,"0"),"frontier127");
+    const a=game.state.units.filter(u=>u.owner==="A");
+    const b=game.state.units.filter(u=>u.owner==="B");
+    assert.equal(a.length,5,"Blue opening army must have five squads");
+    assert.equal(b.length,5,"Red opening army must have five squads");
+    assert.deepEqual(signature(a),signature(b),
+      "Teams must have the same number, roles, health, strength and weight");
+    assert.deepEqual(game.budgetA,game.budgetB,"Opening resources are not symmetric");
+    assert.deepEqual(game.budgetA,
+      {freeMove:1,freeAction:1,apPool:3,apCarry:0},
+      "Current *legacy* round economy must not be changed without a new rulesVersion");
+    for(const side of ["A","B"]){
+      const orders=chooseBotRoundOrders(game,side);
+      assert.deepEqual(validatePracticeOrders(game,side,orders).valid,true,
+        "Both seats must use the same canonical validator");
+      assert(orders.move||orders.attack,"Entire squad at a starting position has no legal opening order");
+      assert.equal(orders.bid,0,"Current scripted house bot bid baseline changed unexpectedly");
+    }
+    // A live sight projection can display fewer RED units; it must never
+    // alter the actual army, available commands or scoreboard total.
+    const aView=practiceView(game,"A");
+    const bView=practiceView(game,"B");
+    assert.equal(aView.blue,5);
+    assert.equal(aView.red,5);
+    assert.equal(bView.blue,5);
+    assert.equal(bView.red,5);
+    assert.equal(aView.availableAp,bView.availableAp);
+  }
+});
+
+test("PVP economy observability: paired 5v5 house-bot baseline logs seat actions and outcomes",()=>{
+  const stats={
+    matches:32,winnerA:0,winnerB:0,draws:0,roundCap:0,rounds:0,
+    declaredMoves:{A:0,B:0},declaredAttacks:{A:0,B:0},
+    holds:{A:0,B:0},bids:{A:0,B:0},
+    unitActivation:{A:new Set(),B:new Set()},
+  };
+  for(let i=0;i<stats.matches;i++){
+    const game=newPractice("matchup-audit-"+String(i).padStart(3,"0"),"frontier127");
+    while(!game.finished&&game.round<game.state.roundCap){
+      const a=chooseBotRoundOrders(game,"A");
+      const b=chooseBotRoundOrders(game,"B");
+      // Both plans derive only from their side's permitted public observation
+      // and are evaluated by the SAME round validator.
+      assert(validatePracticeOrders(game,"A",a).valid);
+      assert(validatePracticeOrders(game,"B",b).valid);
+      for(const [side,orders] of [["A",a],["B",b]]){
+        if(orders.move){
+          stats.declaredMoves[side]++;
+          stats.unitActivation[side].add(orders.move.unitId);
+        }
+        if(orders.attack){
+          stats.declaredAttacks[side]++;
+          stats.unitActivation[side].add(orders.attack.unitId);
+        }
+        if(!orders.move&&!orders.attack)stats.holds[side]++;
+        stats.bids[side]+=orders.bid;
+      }
+      const out=advancePractice(game,a);
+      assert.equal(out.bidA,a.bid);
+      assert.equal(out.bidB,b.bid);
+      assert(game.budgetA.apCarry>=0&&game.budgetA.apCarry<=1);
+      assert(game.budgetB.apCarry>=0&&game.budgetB.apCarry<=1);
+      assert(game.state.units.every(u=>u.hp>=0));
+    }
+    assert(game.finished,"No matchup result was recorded");
+    if(game.finished.winner==="A")stats.winnerA++;
+    else if(game.finished.winner==="B")stats.winnerB++;
+    else stats.draws++;
+    stats.rounds+=game.round;
+    if(game.round===game.state.roundCap)stats.roundCap++;
+  }
+  assert(stats.declaredMoves.A>0&&stats.declaredMoves.B>0);
+  assert(stats.declaredAttacks.A>0&&stats.declaredAttacks.B>0);
+  // This is a measurement, NOT a certification of seat balance. In
+  // particular chooseBotAction has a Red-only defensive hold branch.
+  // Report the bias so v2 owners cannot claim 1v1 fairness from a green CI.
+  console.log("MATCHUP_ECONOMY_BASELINE",JSON.stringify({
+    matches:stats.matches,A:stats.winnerA,B:stats.winnerB,draw:stats.draws,
+    roundCap:stats.roundCap,meanRounds:Number((stats.rounds/stats.matches).toFixed(2)),
+    declaredMoves:stats.declaredMoves,declaredAttacks:stats.declaredAttacks,
+    holds:stats.holds,bids:stats.bids,
+    activatedSquadIds:{A:stats.unitActivation.A.size,B:stats.unitActivation.B.size},
+  }));
+});
