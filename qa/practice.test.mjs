@@ -12,6 +12,7 @@ import { runRound } from "../dist/pages/rules/engine/roundDriver.js";
 import { newBudget } from "../dist/pages/rules/engine/round-state.js";
 import {
   newPractice,practiceView,legalCommands,chooseBotAction,
+  chooseBotRoundOrders,validatePracticeOrders,
   advancePractice,numericSeed,
 } from "../dist/pages/practice-core.mjs";
 
@@ -65,13 +66,16 @@ test("single round result matches the shared runRound implementation",()=>{
   }:{
     bid:0,extras:[],freeAction:{unitId:unit.id,type:"attack",from:unit.position,to:act.to}
   };
-  const botAction=chooseBotAction(game,"B");
-  const bot=game.state.units.find(u=>u.id===botAction.unitId);
-  const planB=botAction.kind==="move"?{
-    bid:0,extras:[],freeMove:{unitId:bot.id,from:bot.position,to:botAction.to}
-  }:botAction.kind==="attack"?{
-    bid:0,extras:[],freeAction:{unitId:bot.id,type:"attack",from:bot.position,to:botAction.to}
-  }:{bid:0,extras:[]};
+  const botOrders=chooseBotRoundOrders(game,"B");
+  const planB={bid:botOrders.bid,extras:[]};
+  if(botOrders.move){
+    const u=game.state.units.find(x=>x.id===botOrders.move.unitId);
+    planB.freeMove={unitId:u.id,from:u.position,to:botOrders.move.to};
+  }
+  if(botOrders.attack){
+    const u=game.state.units.find(x=>x.id===botOrders.attack.unitId);
+    planB.freeAction={unitId:u.id,type:"attack",from:u.position,to:botOrders.attack.to};
+  }
   const expected=runRound({matchId:ref.matchId,round:0,state:ref.state,
     planA,planB,budgetA:ref.budgetA,budgetB:ref.budgetB});
   const applied=advancePractice(game,act);
@@ -152,7 +156,7 @@ test("80-seed bot quality gate: low turn-cap rate, fast outcomes, no two-hex loo
   for(let index=0;index<80;index++){
     const game=newPractice("cohort-"+index);
     while(!game.finished && game.round<50){
-      const action=chooseBotAction(game,"A");
+      const action=chooseBotRoundOrders(game,"A");
       advancePractice(game,action);
     }
     assert(game.finished,"Bot game never finalized");
@@ -209,16 +213,17 @@ test("200-seed deterministic bot cohort avoids reverse-movement deadlocks",()=>{
     const game=newPractice(seed);
     const last={A:null,B:null};
     while(!game.finished&&game.round<game.state.roundCap){
-      const nextA=chooseBotAction(game,"A"),nextB=chooseBotAction(game,"B");
+      const nextA=chooseBotRoundOrders(game,"A"),nextB=chooseBotRoundOrders(game,"B");
       const before=new Map(game.state.units.map(u=>[u.id,{
         owner:u.owner,q:u.position.q,r:u.position.r,
       }]));
       const result=advancePractice(game,nextA);
       stats.attacks+=result.events.filter(e=>e==="unit_attacked").length;
       stats.moves+=result.events.filter(e=>e==="unit_moved").length;
-      if(nextA.kind==="pass"&&nextB.kind==="pass")stats.passPairs++;
-      for(const [side,action] of [["A",nextA],["B",nextB]]){
-        if(action.kind!=="move"){
+      if(!nextA.move&&!nextA.attack&&!nextB.move&&!nextB.attack)stats.passPairs++;
+      for(const [side,roundOrders] of [["A",nextA],["B",nextB]]){
+        const action=roundOrders.move;
+        if(!action){
           last[side]=null;
           continue;
         }
@@ -309,7 +314,7 @@ test("balanced61 200-seed real rules engine bot cohort completes without infinit
   for(let i=0;i<200;i++){
     const game=newPractice("balanced-"+String(i).padStart(3,"0"),"balanced61");
     while(!game.finished&&game.round<game.state.roundCap){
-      const action=chooseBotAction(game,"A");
+      const action=chooseBotRoundOrders(game,"A");
       const output=advancePractice(game,action);
       result.attacks+=output.events.filter(e=>e==="unit_attacked").length;
       result.moves+=output.events.filter(e=>e==="unit_moved").length;
@@ -372,4 +377,39 @@ test("browser-published round engine burns sealed bid AP and refuses malformed b
     assert.deepEqual(validateRoundPlan({bid,extras:[]},"A",game.state,game.budgetA),
       {ok:false,reason:"bid_invalid"});
   }
+});
+
+test("two-slot human round validates, prices bid and retains other slot when added",()=>{
+  let game=null,move=null,attack=null;
+  for(let i=0;i<150;i++){
+    const candidate=newPractice("dual-"+String(i).padStart(3,"0"),"balanced61");
+    const all=candidate.state.units.filter(u=>u.owner==="A")
+      .flatMap(u=>legalCommands(candidate,"A",u.id));
+    const a=all.find(x=>x.kind==="attack");
+    const m=all.find(x=>x.kind==="move"&&x.unitId!==a?.unitId);
+    if(m&&a){game=candidate;move=m;attack=a;break;}
+  }
+  assert(game && move && attack,"No scenario with different-squad free move + attack");
+  const before=structuredClone(game);
+  const roundOrders={move,attack,bid:1};
+  assert.deepEqual(validatePracticeOrders(game,"A",roundOrders),
+    {valid:true,availableAp:3});
+  assert.deepEqual(game,before,"Preview mutated an authoritative match");
+  const result=advancePractice(game,roundOrders);
+  assert.equal(result.playerAction,"move+attack");
+  assert.equal(result.bidA,1);
+  assert.equal(game.history[0].playerMove?.unitId,move.unitId);
+  assert.equal(game.history[0].playerAttack?.unitId,attack.unitId);
+  assert.equal(game.round,1);
+  assert([3,4].includes(practiceView(game).availableAp));
+});
+test("free round plan preview rejects malformed second slot without advancing state",()=>{
+  const game=newPractice("invalid-dual","legacy81");
+  const start=structuredClone(game);
+  const unit=game.state.units.find(u=>u.owner==="A");
+  const attack={kind:"attack",unitId:unit.id,to:{q:99,r:0,s:-99}};
+  assert.throws(()=>validatePracticeOrders(game,"A",{attack,bid:0}),/not legal/);
+  assert.throws(()=>validatePracticeOrders(game,"A",{bid:-1}),/Initiative bid/);
+  assert.throws(()=>validatePracticeOrders(game,"A",{bid:4}),/Initiative bid/);
+  assert.deepEqual(game,start);
 });
