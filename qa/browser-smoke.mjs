@@ -295,7 +295,7 @@ async function verifyPlayablePractice(mobile=false){
   assert.equal(await squadButtons.count(),5,
     "Frontier must offer one readable quick-select per friendly squad");
   const actualRoles=(await squadButtons.allTextContents())
-    .map(label=>label.trim().split(/\\s+/)[0].toLowerCase()).sort();
+    .map(label=>label.trim().split(/\s+/)[0].toLowerCase()).sort();
   assert.deepEqual(actualRoles,["captain","interceptor","raider","scout","siege"],
     "Every human match must deploy all five distinct canonical tactical classes");
   const silhouettes=await page.locator("#battle-map .cell .unit").evaluateAll(nodes=>
