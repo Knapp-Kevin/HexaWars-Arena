@@ -1,6 +1,7 @@
 import type { PresenceTracker } from "../matchmaker/presence.ts";
 import type { RunnerResult } from "../runner/types.ts";
 import { LiveAgentChannel, LIVE_PROTOCOL_VERSION, type LiveSocket } from "./live-channel.ts";
+import { ACTIVE_FRONTIER_RULES_VERSION,ACTIVE_FRONTIER_TOPOLOGY } from "../engine/frontier-match.ts";
 
 type Connected = {
   socket: LiveSocket & { close?: (code?: number, reason?: string) => void };
@@ -55,6 +56,10 @@ export class LiveConnections {
     for (const [entry, side] of [[a, "A"], [b, "B"]] as const) {
       entry.socket.send(JSON.stringify({
         type: "HELLO", matchId, side, protocolVersion: LIVE_PROTOCOL_VERSION,
+        rulesVersion: ACTIVE_FRONTIER_RULES_VERSION,
+        topology:ACTIVE_FRONTIER_TOPOLOGY,boardCells:127,
+        roles:["scout","raider","interceptor","siege","captain"],
+        freeMoves:2,freeAttacks:1,
         // No deterministic seed while hidden board information is still private.
       }));
     }
