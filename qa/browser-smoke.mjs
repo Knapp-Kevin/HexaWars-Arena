@@ -464,6 +464,9 @@ async function verifyFinishedMatchAndRematch(mobile=false){
   assert((await page.locator("#result-detail").innerText()).includes("Unranked"));
   assert(await page.locator("#commit-round").isDisabled());
   assert(await page.locator("#skip-round").isDisabled());
+  assert(await page.locator("aside").isHidden(),
+    "Finished battle still shows obsolete orders or disabled command bars");
+  assert(await page.locator("body").evaluate(el=>el.classList.contains("match-finished")));
   await page.screenshot({path:resolve(screenshots,
     mobile?"practice-complete-mobile.png":"practice-complete-desktop.png"),fullPage:true});
 
