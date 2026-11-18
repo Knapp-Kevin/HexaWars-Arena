@@ -178,3 +178,74 @@ test("80-seed bot quality gate: low turn-cap rate, fast outcomes, no two-hex loo
   assert(stuck.length<=8,"Bot pursuit reaches turn cap too frequently");
   assert.equal(maxAlternation,0,"A unit oscillated between two hexes for six moves");
 });
+
+test("bot policy is pure, bounded, seat-valid and does not attack unseen units",()=>{
+  const game=newPractice("cohort-047");
+  const before=structuredClone(game);
+  for(const side of ["A","B"]){
+    const action=chooseBotAction(game,side);
+    assert.deepEqual(game,before,"Bot decision mutated the match");
+    if(action.kind==="pass")continue;
+    const allowed=legalCommands(game,side,action.unitId);
+    assert(allowed.some(cmd=>cmd.kind===action.kind &&
+      cmd.to.q===action.to.q && cmd.to.r===action.to.r),
+      "Bot selected an illegal move or attack");
+    if(action.kind==="attack"){
+      const seen=practiceView(game,side).units.filter(u=>u.side!==side);
+      assert(seen.some(u=>u.q===action.to.q && u.r===action.to.r),
+        "Bot attacked a concealed enemy");
+    }
+  }
+});
+test("200-seed deterministic bot cohort avoids reverse-movement deadlocks",()=>{
+  const stats={matches:200,cap:0,reversals:0,rounds:0,attacks:0,moves:0,passPairs:0};
+  const worst=[];
+  for(let i=0;i<200;i++){
+    const seed="cohort-"+String(i).padStart(3,"0");
+    const game=newPractice(seed);
+    const last={A:null,B:null};
+    while(!game.finished&&game.round<game.state.roundCap){
+      const nextA=chooseBotAction(game,"A"),nextB=chooseBotAction(game,"B");
+      const before=new Map(game.state.units.map(u=>[u.id,{
+        owner:u.owner,q:u.position.q,r:u.position.r,
+      }]));
+      const result=advancePractice(game,nextA);
+      stats.attacks+=result.events.filter(e=>e==="unit_attacked").length;
+      stats.moves+=result.events.filter(e=>e==="unit_moved").length;
+      if(nextA.kind==="pass"&&nextB.kind==="pass")stats.passPairs++;
+      for(const [side,action] of [["A",nextA],["B",nextB]]){
+        if(action.kind!=="move"){
+          last[side]=null;
+          continue;
+        }
+        const old=before.get(action.unitId);
+        const after=game.state.units.find(u=>u.id===action.unitId);
+        if(!old||!after)continue;
+        const from=old.q+","+old.r;
+        const to=after.position.q+","+after.position.r;
+        if(last[side]&&last[side].unitId===action.unitId &&
+          last[side].from===to&&last[side].to===from){
+          stats.reversals++;
+        }
+        last[side]={unitId:action.unitId,from,to};
+      }
+      for(const side of ["A","B"]){
+        assert(game.navigation[side].length<=16,"Bot navigation memory unbounded");
+      }
+    }
+    assert(game.finished,"Match never reached a legal conclusion");
+    if(game.round>=game.state.roundCap){
+      stats.cap++;
+      worst.push(seed);
+    }
+    stats.rounds+=game.round;
+  }
+  assert.equal(stats.reversals,0,"An immediate two-hex reversal recurred");
+  assert(stats.cap<=20,`Too many full-length stalemates: ${stats.cap}`);
+  assert(stats.moves>0&&stats.attacks>0,"Bot cohort never exercised gameplay");
+  assert(stats.passPairs<=10,"Both sides repeatedly passed instead of fighting");
+  console.log("BOT COHORT",JSON.stringify({
+    ...stats,averageRounds:Number((stats.rounds/stats.matches).toFixed(2)),
+    cappedSeeds:worst,
+  }));
+});
