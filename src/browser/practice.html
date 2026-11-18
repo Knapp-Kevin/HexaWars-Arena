@@ -93,6 +93,24 @@
       .unit-label{font-size:19px}
     }
     @media(prefers-reduced-motion:reduce){.hex{transition:none}}
+    [hidden]{display:none!important}
+    .game3d{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab;outline-offset:-3px}
+    .three-d-markers{position:absolute;inset:0;pointer-events:none;z-index:2}
+    .three-d-target{position:absolute;pointer-events:auto;transform:translate(-50%,-50%);min-height:36px;min-width:36px;border-radius:50%;padding:3px 5px;font-size:21px;font-weight:900;box-shadow:0 1px 13px #000b;text-shadow:0 1px 2px #000}
+    .three-d-target.select{background:#244e79ec;border:2px solid #9ad1ff;color:#f4faff}
+    .three-d-target.move{background:#0c4765de;border:2px solid #bcecff;color:#f2fbff}
+    .three-d-target.attack{background:#8f2635ec;border:2px solid #ffb3b9;color:#fff5f5}
+    .view-switch,.game3d-tools{position:absolute;z-index:3}
+    .view-switch{top:10px;right:10px;padding:7px 13px;min-height:38px;font-size:12px;background:#142d44ef;border-color:#b6d6ec}
+    .game3d-tools{right:10px;bottom:10px;display:flex;gap:5px;padding:5px;border:1px solid #536d84;border-radius:11px;background:#0b1d30e8}
+    .game3d-tools button{min-width:40px;min-height:40px;padding:3px 8px;font-size:20px}
+    .game3d-tools #game-3d-reset{font-size:12px;min-width:58px}
+    @media(max-width:860px){
+      .view-switch{top:7px;right:7px;min-height:34px;padding:5px 10px;font-size:11px}
+      .game3d-tools{right:6px;bottom:7px}
+      .game3d-tools button{min-width:38px;min-height:38px}
+      .three-d-target{min-width:38px;min-height:38px}
+    }
   </style>
   <script type="module" src="./practice.js"></script>
 </head>
@@ -111,6 +129,14 @@
       </div>
       <div class="arena">
         <svg id="battle-map" viewBox="-450 -450 900 900" role="group" aria-label="Interactive hex battlefield. Select a blue squad to see legal destinations and attacks."></svg>
+        <canvas id="game-3d" class="game3d" hidden tabindex="0" aria-label="Verdant 3D playable battlefield. Click blue squad markers, then choose a glowing move or attack target. Drag to orbit, scroll to zoom."></canvas>
+        <div id="game-3d-markers" class="three-d-markers" hidden role="group" aria-label="3D squad and legal order markers"></div>
+        <button id="toggle-3d" class="view-switch" type="button" disabled aria-pressed="false">3D view</button>
+        <div id="game-3d-tools" class="game3d-tools" hidden role="group" aria-label="3D battlefield camera">
+          <button id="game-3d-out" type="button" aria-label="Zoom out">−</button>
+          <button id="game-3d-in" type="button" aria-label="Zoom in">+</button>
+          <button id="game-3d-reset" type="button" aria-label="Reset camera">Reset</button>
+        </div>
         <div id="ready-screen" class="ready">
           <div class="ready-inner">
             <div class="seal" aria-hidden="true">⬡</div>
@@ -146,7 +172,7 @@
       </details>
     </aside>
   </main>
-  <footer>LOCAL PRACTICE · Prototype 1 · Original rules engine · No ranked outcomes. Play uses a tactical SVG control surface while the 3D battlefield gains direct command selection in the next visual slice.</footer>
+  <footer>LOCAL PRACTICE · Canonical HexaWars rules · Unranked. Choose Verdant 3D for direct tactical markers or switch to the accessible 2D hex map.</footer>
 </div>
 </body>
 </html>
