@@ -25,6 +25,118 @@ let orders={move:null,attack:null,bid:0};
 let scene3D=null,using3D=false,threeDLoading=false,threeDFailed=false;
 const requests=new Map();
 const worker=new Worker("./practice-worker.mjs",{type:"module"});
+
+// One navigable battlefield regardless of renderer. The SVG uses an
+// ordinary viewBox camera; Verdant maintains its own perspective camera.
+// Both are purely visual and cannot modify Worker-owned game state.
+const mapCamera={key:null,bounds:null,cx:0,cy:0,scale:1,pointers:new Map(),
+  lastPinch:null,dragging:false,blockedClick:false};
+const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
+function applyMapCamera(){
+  if(!mapCamera.bounds)return;
+  const [left,top,fullW,fullH]=mapCamera.bounds;
+  const w=fullW/mapCamera.scale,h=fullH/mapCamera.scale;
+  const x=clamp(mapCamera.cx-w/2,left,left+fullW-w);
+  const y=clamp(mapCamera.cy-h/2,top,top+fullH-h);
+  mapCamera.cx=x+w/2;mapCamera.cy=y+h/2;
+  el.map.setAttribute("viewBox",[x,y,w,h].map(v=>v.toFixed(3)).join(" "));
+  el.map.dataset.zoom=mapCamera.scale.toFixed(2);
+}
+function fitMap(bounds,key){
+  if(mapCamera.key!==key){
+    mapCamera.key=key;mapCamera.bounds=bounds;
+    mapCamera.cx=bounds[0]+bounds[2]/2;
+    mapCamera.cy=bounds[1]+bounds[3]/2;
+    mapCamera.scale=1;
+    mapCamera.pointers.clear();mapCamera.lastPinch=null;
+  }
+  applyMapCamera();
+}
+function zoomMap(factor){
+  if(!mapCamera.bounds)return;
+  mapCamera.scale=clamp(mapCamera.scale*factor,1,3.8);
+  applyMapCamera();
+}
+function resetMap(){
+  if(!mapCamera.bounds)return;
+  const [x,y,w,h]=mapCamera.bounds;
+  mapCamera.cx=x+w/2;mapCamera.cy=y+h/2;mapCamera.scale=1;
+  applyMapCamera();
+}
+function panMap(dx,dy){
+  if(!mapCamera.bounds||mapCamera.scale<=1)return;
+  const rect=el.map.getBoundingClientRect();
+  const [, , w,h]=mapCamera.bounds;
+  const unitsPerPixel=Math.max(w/mapCamera.scale/Math.max(1,rect.width),
+    h/mapCamera.scale/Math.max(1,rect.height));
+  mapCamera.cx-=dx*unitsPerPixel;mapCamera.cy-=dy*unitsPerPixel;
+  applyMapCamera();
+}
+function pinchLength(){
+  const pair=[...mapCamera.pointers.values()];
+  return pair.length<2?null:Math.hypot(pair[0].x-pair[1].x,pair[0].y-pair[1].y);
+}
+el.map.addEventListener("pointerdown",event=>{
+  if(!current||using3D||current.ended)return;
+  mapCamera.blockedClick=false;
+  mapCamera.pointers.set(event.pointerId,
+    {x:event.clientX,y:event.clientY,startX:event.clientX,startY:event.clientY});
+  mapCamera.lastPinch=pinchLength();
+});
+el.map.addEventListener("pointermove",event=>{
+  const prev=mapCamera.pointers.get(event.pointerId);
+  if(!prev||using3D)return;
+  const next={...prev,x:event.clientX,y:event.clientY};
+  mapCamera.pointers.set(event.pointerId,next);
+  const dragged=Math.hypot(next.x-next.startX,next.y-next.startY)>7;
+  if(!dragged&&!mapCamera.dragging&&mapCamera.pointers.size<2)return;
+  if(!mapCamera.dragging){
+    mapCamera.dragging=true;el.map.classList.add("dragging");
+    for(const pointerId of mapCamera.pointers.keys()){
+      try{el.map.setPointerCapture(pointerId);}catch{}
+    }
+  }
+  mapCamera.blockedClick=true;
+  if(mapCamera.pointers.size>=2){
+    const length=pinchLength();
+    if(length&&mapCamera.lastPinch&&mapCamera.lastPinch>6)
+      zoomMap(length/mapCamera.lastPinch);
+    mapCamera.lastPinch=length;
+    panMap(next.x-prev.x,next.y-prev.y);
+  }else{
+    panMap(next.x-prev.x,next.y-prev.y);
+  }
+});
+for(const name of ["pointerup","pointercancel"]){
+  el.map.addEventListener(name,event=>{
+    mapCamera.pointers.delete(event.pointerId);
+    mapCamera.lastPinch=pinchLength();
+    if(mapCamera.pointers.size===0){
+      mapCamera.dragging=false;el.map.classList.remove("dragging");
+    }
+  });
+}
+el.map.addEventListener("click",event=>{
+  if(mapCamera.blockedClick){
+    event.preventDefault();event.stopImmediatePropagation();
+    mapCamera.blockedClick=false;
+  }
+},true);
+el.map.addEventListener("wheel",event=>{
+  if(!current||using3D||current.ended)return;
+  event.preventDefault();
+  zoomMap(event.deltaY<0?1.18:1/1.18);
+},{passive:false});
+el.map.addEventListener("keydown",event=>{
+  if(event.target!==el.map||!current||using3D)return;
+  if(event.key==="+"||event.key==="="){event.preventDefault();zoomMap(1.22);}
+  if(event.key==="-"){event.preventDefault();zoomMap(1/1.22);}
+  if(event.key==="0"){event.preventDefault();resetMap();}
+  if(event.key==="ArrowLeft"){event.preventDefault();panMap(90,0);}
+  if(event.key==="ArrowRight"){event.preventDefault();panMap(-90,0);}
+  if(event.key==="ArrowUp"){event.preventDefault();panMap(0,90);}
+  if(event.key==="ArrowDown"){event.preventDefault();panMap(0,-90);}
+});
 /**
  * 3D is a view over the very same public Worker projection and legal commands.
  * If WebGL2 fails, the original keyboard-accessible SVG view remains playable.
@@ -50,7 +162,7 @@ function show2D(reason){
   el.map.removeAttribute("hidden");
   el.threeD.hidden=true;
   el.threeDMarkers.hidden=true;
-  el.threeDTools.hidden=true;
+  el.threeDTools.hidden=!current||!el.ready.hidden;
   el.toggle3D.textContent=threeDFailed?"2D map":"3D view";
   el.toggle3D.setAttribute("aria-pressed","false");
   if(reason)status(reason);
@@ -162,8 +274,9 @@ function draw(){
     minY=Math.min(minY,y-HEIGHT/2);maxY=Math.max(maxY,y+HEIGHT/2);
   }
   const padding=RADIUS*1.45;
-  el.map.setAttribute("viewBox",
-    [minX-padding,minY-padding,maxX-minX+2*padding,maxY-minY+2*padding].join(" "));
+  fitMap([minX-padding,minY-padding,maxX-minX+2*padding,maxY-minY+2*padding],
+    current.rulesVersion+":"+current.seed);
+  el.map.dataset.boardCells=String(current.board.length);
   const pieces=new Map(current.units.map(u=>[u.q+","+u.r,u]));
   for(const {cell,center:[cx,cy]} of points){
     const piece=pieces.get(cell.q+","+cell.r);
@@ -237,7 +350,7 @@ function render(){
 async function startBattle(){
   updateBusy(true);status("Deploying squads…");
   try{
-    const topology=document.querySelector('input[name="arena-topology"]:checked')?.value??"balanced61";
+    const topology=document.querySelector('input[name="arena-topology"]:checked')?.value??"frontier127";
     const reply=await request("START",{
       seed:"local-"+crypto.randomUUID().slice(0,12),topology,
     });
@@ -245,11 +358,13 @@ async function startBattle(){
     orders={move:null,attack:null,bid:0};
     el.bidAmount.value="0";
     el.ready.hidden=true;el.victory.hidden=true;
+    el.threeDTools.hidden=false;
     el.selected.textContent="Choose a blue unit";
     el.command.textContent="Select a squad";
     el.instruction.textContent="Queue one move and one attack. You can revise each before resolving.";
-    el.event.textContent=(current.topology==="balanced61"?"Balanced Hex":"Classic Arena")+
-      " · Blue command vs Red AI · Unranked practice.";
+    const arenaName={frontier127:"Frontier · 127 hexes · five squads",
+      balanced61:"Balanced Hex · 61 hexes",legacy81:"Classic Arena · 81 hexes"};
+    el.event.textContent=(arenaName[current.topology]??"HexaWars")+" · Blue vs Red AI";
     status("Your move. Select a blue squad.");
     render();
   }catch(e){status(String(e?.message||e));}
@@ -333,6 +448,7 @@ el.changeArena.addEventListener("click",()=>{
   if(busy)return;
   el.victory.hidden=true;
   el.ready.hidden=false;
+  el.threeDTools.hidden=true;
   el.start.focus();
 });
 el.commit.addEventListener("click",()=>{void advance({...orders});});
@@ -384,6 +500,6 @@ el.bidAmount.addEventListener("change",()=>{
 });
 el.pass.addEventListener("click",()=>{void advance({kind:"pass"});});
 el.toggle3D.addEventListener("click",()=>{void toggleView();});
-el.zoomIn.addEventListener("click",()=>scene3D?.zoomIn());
-el.zoomOut.addEventListener("click",()=>scene3D?.zoomOut());
-el.resetView.addEventListener("click",()=>scene3D?.reset());
+el.zoomIn.addEventListener("click",()=>using3D?scene3D?.zoomIn():zoomMap(1.25));
+el.zoomOut.addEventListener("click",()=>using3D?scene3D?.zoomOut():zoomMap(1/1.25));
+el.resetView.addEventListener("click",()=>using3D?scene3D?.reset():resetMap());

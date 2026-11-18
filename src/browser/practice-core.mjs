@@ -8,8 +8,8 @@
  * competitive/ranked result. Terrain is publicly visible; enemy tokens use
  * the existing seat-specific observation projection.
  */
-import { initBoard, initHexDiskBoard } from "./rules/engine/board.js";
-import { placeStartingUnits, getAllUnits } from "./rules/engine/units.js";
+import { initBoard, initHexDiskBoard, initFrontierBoard } from "./rules/engine/board.js";
+import { placeStartingUnits, placeFrontierUnits, getAllUnits } from "./rules/engine/units.js";
 import { newBudget, applyCarryover } from "./rules/engine/round-state.js";
 import { runRound } from "./rules/engine/roundDriver.js";
 import { checkVictory } from "./rules/engine/victory.js";
@@ -37,6 +37,7 @@ export function numericSeed(seed){
 export const PRACTICE_TOPOLOGIES=Object.freeze({
   legacy81:"hexawars-legacy81-v1",
   balanced61:"hexawars-balanced61-v1",
+  frontier127:"hexawars-frontier127-v1",
 });
 export function newPractice(seed="practice-alpha-01",topology="legacy81"){
   if(typeof seed!=="string" || !/^[a-zA-Z0-9_-]{1,48}$/.test(seed)){
@@ -46,10 +47,13 @@ export function newPractice(seed="practice-alpha-01",topology="legacy81"){
     throw new Error("Unsupported board topology");
   }
   const encodedSeed=numericSeed(seed);
-  const board=topology==="balanced61"
-    ?initHexDiskBoard(4,encodedSeed)
-    :initBoard(9,encodedSeed);
-  placeStartingUnits(board,encodedSeed);
+  const board=topology==="frontier127"
+    ?initFrontierBoard(encodedSeed)
+    :topology==="balanced61"
+      ?initHexDiskBoard(4,encodedSeed)
+      :initBoard(9,encodedSeed);
+  if(topology==="frontier127")placeFrontierUnits(board);
+  else placeStartingUnits(board,encodedSeed);
   const visible=board.flat();
   return {
     // Preserve exact legacy match IDs so seeded historical practice traces

@@ -16,12 +16,12 @@
     button:disabled{opacity:.42;cursor:not-allowed}
     button:focus-visible,a:focus-visible,input:focus-visible,[tabindex="0"]:focus-visible{outline:3px solid var(--gold);outline-offset:3px}
     a{color:#90c9ff;text-decoration:none}
-    .wrap{max-width:1500px;margin:auto;padding:0 22px}
+    .wrap{max-width:1850px;margin:auto;padding:0 18px}
     header{height:65px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #294155}
     .brand{color:#f1f7fb;font-size:14px;font-weight:900;letter-spacing:.15em}
     .brand span{color:var(--gold);font-size:25px;margin-right:8px}
     nav{display:flex;gap:20px;align-items:center;font-size:13px;font-weight:600}
-    main{padding-top:14px;display:grid;grid-template-columns:minmax(0,1fr) 305px;gap:15px}
+    main{padding-top:10px;display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,290px);gap:12px}
     .stage,.panel{background:#0c1a29;border:1px solid #355470;border-radius:15px;box-shadow:0 16px 35px #0006}
     .stage{padding:10px;min-width:0;position:relative}
     .gamebar{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:2px 6px 10px}
@@ -29,7 +29,7 @@
     .faction strong{border-radius:7px;background:#173750;padding:6px 9px;font-size:17px;color:white}
     .faction.blue{color:#80bcfc}.faction.red{color:#fc8e91}
     .round{color:#f1dfae;text-align:center;font-size:12px;font-weight:800}
-    .arena{height:min(75dvh,760px);min-height:480px;position:relative;overflow:hidden;border-radius:10px;background:radial-gradient(ellipse,#102c3e,#07121d 70%);touch-action:pan-y}
+    .arena{height:min(83dvh,940px);min-height:540px;position:relative;overflow:hidden;border-radius:10px;background:radial-gradient(ellipse,#102c3e,#07121d 70%);touch-action:pan-y}
     svg{width:100%;height:100%;display:block;user-select:none}
     .hex{stroke:#0a2534;stroke-width:2.3;cursor:pointer;transition:stroke .1s,filter .1s}
     .hex:hover{stroke:#dcf6ff;stroke-width:3.2;filter:brightness(1.2)}
@@ -44,7 +44,7 @@
     .unit-hp{font-size:12px;text-anchor:middle;fill:#eaf9ff;font-weight:800;paint-order:stroke;stroke:#08131c;stroke-width:3;pointer-events:none}
     .ready{position:absolute;inset:0;background:#061522db;display:grid;place-items:center;padding:22px;text-align:center}
     .ready[hidden]{display:none}
-    .ready-inner{max-width:340px}
+    .ready-inner{max-width:470px}
     .ready .seal{font-size:70px;color:#efc786;line-height:1}
     .ready h1{font:900 clamp(26px,4vw,40px)/1.1 system-ui;margin:15px 0}
     .ready p{font-size:14px;line-height:1.5;color:#b9cfe0}
@@ -144,7 +144,7 @@
       .is-3d aside .panel.actionbar .victory{grid-column:1/-1}
       .is-3d footer{display:none}
     }
-    .board-choice{border:0;padding:0;margin:14px 0 17px;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .board-choice{border:0;padding:0;margin:14px 0 17px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
     .board-choice legend{width:100%;margin:0 0 8px;text-align:center;font-size:11px;color:#ddc391;font-weight:850;letter-spacing:.14em}
     .board-choice label{position:relative;border:1px solid #536c85;border-radius:10px;background:#173049;padding:11px 6px;display:grid;gap:3px;cursor:pointer;min-height:76px}
     .board-choice label:has(input:checked){border-color:#f2d08b;background:#23465b;box-shadow:inset 0 0 0 1px #d9b77a}
@@ -195,6 +195,47 @@
       .is-3d .bid-line{grid-column:1/-1}
       .is-3d .bid-line select{max-width:145px;min-height:38px}
     }
+
+    /* Battle-first viewport; touch commands stay visible on either map view. */
+    #battle-map{touch-action:none;cursor:grab}
+    #battle-map.dragging{cursor:grabbing}
+    .game3d-tools{min-height:46px}
+    .ready .board-choice label{min-width:0}
+    @media(max-width:860px){
+      body:not(.match-finished){padding-bottom:170px}
+      .arena,.is-3d .arena{height:clamp(375px,calc(100dvh - 238px),700px);min-height:375px}
+      .ready-inner{max-width:420px}
+      .ready{padding:10px}
+      .ready .seal{font-size:38px}
+      .ready h1{font-size:27px;margin:7px 0}
+      .ready p{margin:7px 0;font-size:12px}
+      .board-choice{gap:5px;margin:8px 0}
+      .board-choice label{min-height:74px;padding:8px 5px}
+      .board-choice label strong{font-size:12px}
+      .board-choice label small{font-size:9px}
+      aside>section.panel:first-child{display:none}
+      aside .panel.actionbar,.is-3d aside .panel.actionbar{
+        position:fixed;left:0;right:0;bottom:0;z-index:9;
+        max-height:44dvh;overflow:auto;
+        display:grid;grid-template-columns:1fr 1fr;gap:6px;
+        padding:7px 10px max(7px,env(safe-area-inset-bottom));
+        border-radius:12px 12px 0 0;border:1px solid #56758d;
+        background:#0a1d30f8;box-shadow:0 -7px 28px #0008;
+      }
+      aside .panel.actionbar .order-slots{
+        grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:5px
+      }
+      aside .panel.actionbar .bid-line{grid-column:1/-1}
+      aside .panel.actionbar #commit-round,
+      aside .panel.actionbar #skip-round{min-height:46px;font-size:13px}
+      aside .panel.actionbar .notice{
+        grid-column:1/-1;min-height:0;white-space:nowrap;
+        overflow:hidden;text-overflow:ellipsis
+      }
+      .game3d-tools{right:6px;bottom:7px}
+      .game3d-tools button{min-width:44px;min-height:44px}
+      footer{display:none}
+    }
   </style>
   <script type="module" src="./practice.js"></script>
 </head>
@@ -212,26 +253,28 @@
         <div class="faction red">RED <strong id="score-red">3</strong></div>
       </div>
       <div class="arena">
-        <svg id="battle-map" viewBox="-450 -450 900 900" role="group" aria-label="Interactive hex battlefield. Select a blue squad to see legal destinations and attacks."></svg>
+        <svg id="battle-map" viewBox="-450 -450 900 900" role="group" tabindex="0" aria-label="Interactive hex battlefield. Select Blue squads to see legal orders. Drag to pan; wheel, pinch or use zoom buttons to inspect the battlefield."></svg>
         <canvas id="game-3d" class="game3d" hidden tabindex="0" aria-label="Verdant 3D playable battlefield. Click blue squad markers, then choose a glowing move or attack target. Drag to orbit, scroll to zoom."></canvas>
         <div id="game-3d-markers" class="three-d-markers" hidden role="group" aria-label="3D squad and legal order markers"></div>
         <button id="toggle-3d" class="view-switch" type="button" disabled aria-pressed="false">3D view</button>
-        <div id="game-3d-tools" class="game3d-tools" hidden role="group" aria-label="3D battlefield camera">
+        <div id="game-3d-tools" class="game3d-tools" hidden role="group" aria-label="Battlefield zoom and view controls">
           <button id="game-3d-out" type="button" aria-label="Zoom out">−</button>
           <button id="game-3d-in" type="button" aria-label="Zoom in">+</button>
-          <button id="game-3d-reset" type="button" aria-label="Reset camera">Reset</button>
+          <button id="game-3d-reset" type="button" aria-label="Fit entire battlefield">Fit</button>
         </div>
         <div id="ready-screen" class="ready">
           <div class="ready-inner">
             <div class="seal" aria-hidden="true">⬡</div>
             <h1>Command the arena.</h1>
-            <p>Lead Blue against the Red AI. Pick a squad, give your order, and claim the arena.</p>
+            <p>Command five Blue squads across a larger frontier. Move, attack, and outmaneuver Red.</p>
             <fieldset class="board-choice" aria-label="Choose battlefield">
               <legend>BATTLEFIELD</legend>
-              <label><input type="radio" name="arena-topology" value="balanced61" checked>
-                <strong>Balanced Hex</strong><small>Symmetric arena · Preview</small></label>
+              <label><input type="radio" name="arena-topology" value="frontier127" checked>
+                <strong>Frontier</strong><small>127 hexes · 5 squads each</small></label>
+              <label><input type="radio" name="arena-topology" value="balanced61">
+                <strong>Balanced</strong><small>61 hexes · 3 squads each</small></label>
               <label><input type="radio" name="arena-topology" value="legacy81">
-                <strong>Classic</strong><small>Original battlefield</small></label>
+                <strong>Legacy</strong><small>81 hexes · 3 squads each</small></label>
             </fieldset>
             <button id="start-battle" type="button">Start battle</button>
           </div>
@@ -286,7 +329,7 @@
       </section>
       <details class="panel tips">
         <summary>How it works</summary>
-        <p>Each round, queue <strong>one free move and one free attack</strong>, possibly on different Blue squads. Tap a unit to see allowed moves and attacks. Review your two slots, then resolve the round. Both sides act in initiative order. A higher AP bid moves first but burns that AP. Further AP extras are not yet available in practice.</p><p>Scouts move exactly three hexes, infantry two, heavies one. A legal move must follow passable connected terrain. Attacks have each squad's own range and retaliation risks. This preview limits same-squad move-and-attack combinations that would leave the attack out of range.</p>
+        <p>Choose a Blue squad, then a highlighted destination. Drag or pinch the map to explore. Each round, queue <strong>one free move and one free attack</strong>, possibly on different Blue squads. Tap a unit to see allowed moves and attacks. Review your two slots, then resolve the round. Both sides act in initiative order. A higher AP bid moves first but burns that AP. Further AP extras are not yet available in practice.</p><p>Scouts move exactly three hexes, infantry two, heavies one. A legal move must follow passable connected terrain. Attacks have each squad's own range and retaliation risks. This preview limits same-squad move-and-attack combinations that would leave the attack out of range.</p>
         <p>Choose a Balanced Hex preview or the original Classic arena before each battle. Both use the same legal-action and combat rules. Local practice has no ranking, cloud matchmaking, or anti-cheat enforcement.</p>
       </details>
     </aside>

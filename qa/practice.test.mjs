@@ -2,8 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createMatch } from "../src/engine/match.ts";
 import {findTraversablePath} from "../src/gateway/validator/move-path.ts";
-import { initHexDiskBoard } from "../src/engine/board.ts";
-import { placeStartingUnits,getAllUnits } from "../src/engine/units.ts";
+import { initHexDiskBoard, initFrontierBoard, FRONTIER_STARTS_A } from "../src/engine/board.ts";
+import { placeStartingUnits,placeFrontierUnits,getAllUnits } from "../src/engine/units.ts";
 import { practiceScene, projectWorldToScreen } from "../src/browser/practice-3d.mjs";
 import { resolveCombat } from "../src/engine/combat.ts";
 import { checkVictory } from "../src/engine/victory.ts";
@@ -456,4 +456,74 @@ test("human can queue a canonically legal attack newly reachable AFTER its free 
     c.to.q===4&&c.to.r===0),"Staged preview cannot reveal a hidden enemy");
   assert.throws(()=>validatePracticeOrders(game,"A",{move,attack,bid:0}),
     /not legal/,"Hidden targets must not be accepted in human practice");
+});
+
+test("Frontier127 has mirrored tactical terrain, five fair deployments and an immutable rules identity",()=>{
+  const position=p=>p.q+","+p.r+","+p.s;
+  for(const seed of ["frontier-check-001","frontier-check-002","frontier-check-003"]){
+    const game=newPractice(seed,"frontier127");
+    const board=initFrontierBoard(numericSeed(seed));
+    placeFrontierUnits(board);
+    assert.equal(game.rulesVersion,"hexawars-frontier127-v1");
+    assert.equal(game.state.visible.length,127);
+    assert.deepEqual(game.state.visible,board.flat());
+    assert.deepEqual(game.state.units,getAllUnits(board));
+    assert.equal(game.state.units.filter(u=>u.owner==="A").length,5);
+    assert.equal(game.state.units.filter(u=>u.owner==="B").length,5);
+    const byCoord=new Map(game.state.visible.map(cell=>[position(cell.position),cell]));
+    for(const cell of game.state.visible){
+      assert(Math.max(Math.abs(cell.position.q),Math.abs(cell.position.r),
+        Math.abs(cell.position.s))<=6);
+      const opposite=byCoord.get(position({
+        q:-cell.position.q,r:-cell.position.r,s:-cell.position.s,
+      }));
+      assert(opposite,"Frontier disk has unmatched opposite cell");
+      assert.equal(opposite.terrain,cell.terrain,
+        "Starting terrain should be symmetric across both armies");
+    }
+    const a=game.state.units.filter(u=>u.owner==="A");
+    const b=game.state.units.filter(u=>u.owner==="B");
+    assert.deepEqual(a.map(u=>u.type).sort(),b.map(u=>u.type).sort());
+    for(const unit of a){
+      assert(b.some(other=>other.type===unit.type &&
+        other.position.q===-unit.position.q &&
+        other.position.r===-unit.position.r &&
+        other.position.s===-unit.position.s));
+      assert(legalCommands(game,"A",unit.id).some(command=>command.kind==="move"),
+        "Each opening squad needs a legal, traversable route");
+    }
+    assert.equal(new Set(game.state.units.map(u=>u.id)).size,10,
+      "Every squad needs a stable unique identifier");
+    assert.equal(practiceView(game).board.length,127);
+    assert.equal(practiceScene(practiceView(game)).board.cells.length,127);
+    const historic=newPractice(seed,"balanced61");
+    const legacy=newPractice(seed,"legacy81");
+    assert.equal(historic.state.visible.length,61);
+    assert.equal(legacy.state.visible.length,81);
+    assert.equal(legacy.matchId,"practice:"+seed);
+    assert.notEqual(game.matchId,historic.matchId);
+  }
+  assert.equal(FRONTIER_STARTS_A.length,5);
+});
+
+test("Frontier127 bot matches stay bounded and complete with real movement and attacks",()=>{
+  const results={matches:40,rounds:0,turnCaps:0,moves:0,attacks:0};
+  for(let i=0;i<results.matches;i++){
+    const game=newPractice("frontier-cohort-"+String(i).padStart(3,"0"),"frontier127");
+    while(!game.finished&&game.round<game.state.roundCap){
+      const plan=chooseBotRoundOrders(game,"A");
+      const outcome=advancePractice(game,plan);
+      results.moves+=outcome.events.filter(e=>e==="unit_moved").length;
+      results.attacks+=outcome.events.filter(e=>e==="unit_attacked").length;
+      assert.equal(game.state.visible.length,127);
+      assert(game.navigation.A.length<=16&&game.navigation.B.length<=16);
+    }
+    assert(game.finished,"New battlefield must conclude no later than its round cap");
+    results.rounds+=game.round;
+    if(game.round===game.state.roundCap)results.turnCaps++;
+  }
+  assert(results.moves>0&&results.attacks>0,"Large battlefield generated no combat");
+  console.log("FRONTIER127 BOT COHORT",JSON.stringify({
+    ...results,meanRounds:Number((results.rounds/results.matches).toFixed(2)),
+  }));
 });
