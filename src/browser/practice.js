@@ -395,7 +395,7 @@ function render(){
     el.command.textContent="Battle complete";
     status("Battle finished. Choose your next battle.");
   }
-  el.moveTwoSlot.hidden=current.economy!=="maneuver-v2";
+  el.moveTwoSlot.hidden=current.maxMoves!==2;
   showOrders();updateBusy(busy);draw();sync3D();
 }
 async function startBattle(){
@@ -403,7 +403,7 @@ async function startBattle(){
   try{
     const topology=document.querySelector('input[name="arena-topology"]:checked')?.value??"frontier127";
     const requestedEconomy=document.querySelector(
-      'input[name="command-economy"]:checked')?.value??"maneuver-v2";
+      'input[name="command-economy"]:checked')?.value??"maneuver-v3-vision";
     const economy=topology==="frontier127"?requestedEconomy:"classic-v1";
     const reply=await request("START",{
       seed:"local-"+crypto.randomUUID().slice(0,12),topology,economy,
@@ -419,13 +419,15 @@ async function startBattle(){
     el.threeDTools.hidden=false;
     el.selected.textContent="Choose a blue unit";
     el.command.textContent="Select a squad";
-    el.instruction.textContent=current.economy==="maneuver-v2"
+    el.instruction.textContent=current.maxMoves===2
       ?"Two different Blue squads can move. Then queue one attack.":
       "Queue one move and one attack. You can revise each before resolving.";
     const arenaName={frontier127:"Frontier · 127 hexes · five squads",
       balanced61:"Balanced Hex · 61 hexes",legacy81:"Classic Arena · 81 hexes"};
     el.event.textContent=(arenaName[current.topology]??"HexaWars")+
-      (current.economy==="maneuver-v2"?" · Maneuver: 2 moves + 1 attack":"")+
+      (current.maxMoves===2
+        ?" · Maneuver: 2 moves + 1 attack"+(current.economy==="maneuver-v3-vision"?" · Clear sight":"")
+        :"")+
       (current.opponentPolicy==="bid-aware-v1"?" · Red AI contests initiative":" · Blue vs Red AI");
     status("Your move. Select a blue squad.");
     render();
@@ -444,7 +446,7 @@ async function selectUnit(unit,focus=false){
       (orders.move?.unitId===unit.id
         ? "Move queued. Highlighted attacks use the planned destination. Visible enemies only."
         : "Move "+unit.moveRange+" hexes via clear terrain · Attack range "+
-          unit.attackRange+(current.economy==="maneuver-v2"
+          unit.attackRange+(current.maxMoves===2
             ?". Choose two DIFFERENT squads to move. Then one attack."
             :". Queue either or both free slots.")):
       "No valid move or visible attack. Select another squad.";
@@ -460,7 +462,7 @@ function clickCell(cell,piece,choice){
     void (async()=>{
       const candidate={kind:choice.kind,unitId:selectedId,
         to:{q:cell.q,r:cell.r,s:-cell.q-cell.r}};
-      const slot=choice.kind==="move"&&current.economy==="maneuver-v2"
+      const slot=choice.kind==="move"&&current.maxMoves===2
         ?orders.move?.unitId===selectedId?"move"
           :orders.move2?.unitId===selectedId?"move2"
           :orders.move?"move2":"move"

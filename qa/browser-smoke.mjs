@@ -252,8 +252,10 @@ async function verifyPlayablePractice(mobile=false){
     undefined,{timeout:30000});
   assert.equal((await page.locator('input[value="frontier127"]').isChecked()),true,
     "The human default should be the larger Frontier board");
-  assert.equal(await page.locator('input[name="command-economy"][value="maneuver-v2"]').isChecked(),
-    true,"Default Frontier should visibly offer the new, unranked two-move rules");
+  assert((await page.locator("#event-label").innerText()).includes("Clear sight"),
+    "The new visible gameplay rules must disclose the corrected line-of-sight variant");
+  assert.equal(await page.locator('input[name="command-economy"][value="maneuver-v3-vision"]').isChecked(),
+    true,"Default Frontier should explicitly offer corrected tactical sight without rewriting archived rules");
   assert(await page.locator("#move-two-slot").isVisible(),
     "The human must see two move slots, not just a v2 label");
   const symmetry=await page.locator("#battle-map .cell").evaluateAll(nodes=>{

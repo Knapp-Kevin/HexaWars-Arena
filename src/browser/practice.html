@@ -266,7 +266,7 @@
       }
     }
     .order-slot[hidden]{display:none!important}
-    .economy-choice{display:grid;grid-template-columns:1fr 1fr;gap:7px;
+    .economy-choice{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;
       border:0;padding:0;margin:5px 0 11px;text-align:left}
     .economy-choice legend{font-size:10px;color:#ddc391;letter-spacing:.08em;
       font-weight:850;margin-bottom:5px}
@@ -336,10 +336,12 @@
             </fieldset>
             <fieldset class="economy-choice" aria-label="Choose turn economy">
               <legend>COMMAND RULES · FRONTIER ONLY</legend>
-              <label><input type="radio" name="command-economy" value="maneuver-v2" checked>
-                <strong>Maneuver</strong><small>2 moves + 1 attack · Experimental</small></label>
+              <label><input type="radio" name="command-economy" value="maneuver-v3-vision" checked>
+                <strong>Clear sight</strong><small>2 moves · New</small></label>
+              <label><input type="radio" name="command-economy" value="maneuver-v2">
+                <strong>Maneuver v2</strong><small>2 moves · Archive</small></label>
               <label><input type="radio" name="command-economy" value="classic-v1">
-                <strong>Original</strong><small>1 move + 1 attack</small></label>
+                <strong>Original</strong><small>1 move · Archive</small></label>
             </fieldset>
             <button id="start-battle" type="button">Start battle</button>
           </div>
@@ -400,7 +402,7 @@
       <details class="panel tips">
         <summary>How it works</summary>
         <p>Choose a Blue squad, then a highlighted destination. Drag or pinch the map to explore. Frontier Maneuver prototype: <strong>two distinct squads can move and one can attack</strong> per round; old arenas keep their original one-move economy. Tap a unit to see allowed moves and attacks. Review your two slots, then resolve the round. Both sides act in initiative order. A higher AP bid determines priority within each movement/attack wave but consumes that AP. Unused free actions never generate AP in Maneuver. Further AP extras are not yet available in practice.</p><p>Scouts move exactly three hexes, infantry two, heavies one. A legal move must follow passable connected terrain. Attacks have each squad's own range and retaliation risks. This preview limits same-squad move-and-attack combinations that would leave the attack out of range.</p>
-        <p>Frontier Maneuver is an unranked, separately versioned test economy. Balanced and Legacy remain frozen. These are human-vs-AI games, not networked PvP or ranked anti-cheat matches.</p>
+        <p>Clear sight is the new versioned experiment: its lines of sight follow valid hexes, so open ground no longer hides enemies. Maneuver v2 and Original retain archived visibility rules. Balanced and Legacy remain unchanged. All modes are local human-vs-AI, not networked PvP.</p>
       </details>
     </aside>
   </main>

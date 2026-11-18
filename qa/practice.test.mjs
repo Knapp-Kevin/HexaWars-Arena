@@ -9,6 +9,7 @@ import { resolveCombat } from "../src/engine/combat.ts";
 import { checkVictory } from "../src/engine/victory.ts";
 import { validateRoundPlan } from "../dist/pages/rules/gateway/validator.js";
 import { runRound,runFrontierRound } from "../dist/pages/rules/engine/roundDriver.js";
+import {cubeLineSymmetric} from "../dist/pages/rules/engine/fog-corrected.js";
 import { resolveBids } from "../dist/pages/rules/engine/bidResolver.js";
 import { newBudget } from "../dist/pages/rules/engine/round-state.js";
 import { validateFrontierRoundPlan } from "../dist/pages/rules/gateway/frontier-round-validator.js";
@@ -1035,4 +1036,73 @@ test("32 controlled seat swaps isolate initiative from physical-start bias in bo
   console.log("SEAT_SWAPPED_INITIATIVE_AUDIT",JSON.stringify(result));
   // Measurement-only until validated competitive balance threshold exists:
   // forcing 50/50 here would hide a legitimate source of side advantage.
+});
+
+test("Frontier v3 sight reveals real plain diagonal attacks while preserving archived replay semantics",()=>{
+  const at=(q,r)=>({q:q===0?0:q,r:r===0?0:r,s:q+r===0?0:-q-r}),seed="fog-corrected-test";
+  const classic=newPractice(seed,"frontier127","bid-aware-v1","classic-v1");
+  const old=newPractice(seed,"frontier127","bid-aware-v1","maneuver-v2");
+  const fixed=newPractice(seed,"frontier127","bid-aware-v1","maneuver-v3-vision");
+  assert.deepEqual(classic.state,fixed.state);
+  assert.deepEqual(old.state,fixed.state);
+  assert.notEqual(fixed.matchId,old.matchId);
+  assert.equal(fixed.rulesVersion,"hexawars-frontier127-maneuver-v3-vision");
+  assert.equal(old.rulesVersion,"hexawars-frontier127-maneuver-v2");
+  assert.equal(practiceView(fixed,"A").maxMoves,2);
+  assert.throws(()=>newPractice(seed,"legacy81","legacy-v1","maneuver-v3-vision"),
+    /Unsupported economy/);
+  const hero={id:"A-observer",owner:"A",type:"heavy",weight:3,
+    hp:8,strength:5,position:at(0,0)};
+  const enemy={id:"B-seen",owner:"B",type:"scout",weight:1,
+    hp:3,strength:2,position:at(1,1)};
+  const put=game=>{
+    game.state.units=[structuredClone(hero),structuredClone(enemy)];
+    game.state.visible=game.state.visible.map(cell=>({...cell,terrain:"plain",
+      unit:game.state.units.find(u=>u.position.q===cell.position.q&&u.position.r===cell.position.r)}));
+  };
+  put(old);put(fixed);
+  assert.equal(practiceView(old,"A").units.filter(u=>u.side==="B").length,0);
+  assert.equal(practiceView(fixed,"A").units.filter(u=>u.side==="B").length,1);
+  const attack={kind:"attack",unitId:hero.id,to:at(1,1)};
+  assert(!legalCommands(old,"A",hero.id).some(c=>c.kind==="attack"&&c.to.q===1));
+  assert(legalCommands(fixed,"A",hero.id).some(c=>c.kind==="attack"&&c.to.q===1));
+  assert.throws(()=>validatePracticeOrders(old,"A",{attack,bid:0}),/not legal/);
+  assert(validatePracticeOrders(fixed,"A",{attack,bid:0}).valid);
+  assert.deepEqual(cubeLineSymmetric(at(0,0),at(1,1)),[
+    at(0,0),at(0,1),at(1,1),
+  ]);
+  const blocker=fixed.state.visible.find(c=>c.position.q===0&&c.position.r===1);
+  blocker.terrain="forest";
+  assert.equal(practiceView(fixed,"A").units.filter(u=>u.side==="B").length,0);
+  blocker.terrain="plain";
+  assert.equal(practiceView(fixed,"A").units.filter(u=>u.side==="B").length,1);
+});
+
+test("Frontier v3 sight 16-seed live 5v5 cohort exercises both moves and legal bids",()=>{
+  const stats={A:0,B:0,draw:0,rounds:0,bidsA:0,bidsB:0,secondA:0,secondB:0,moves:0,attacks:0,caps:0};
+  for(let i=0;i<16;i++){
+    const game=newPractice("v3-sight-"+String(i).padStart(3,"0"),
+      "frontier127","bid-aware-v1","maneuver-v3-vision");
+    while(!game.finished&&game.round<game.state.roundCap){
+      const a=chooseBotRoundOrders(game,"A"),b=chooseBotRoundOrders(game,"B");
+      assert(validatePracticeOrders(game,"A",a).valid);
+      assert(validatePracticeOrders(game,"B",b).valid);
+      if(a.move2)stats.secondA++;
+      if(b.move2)stats.secondB++;
+      stats.bidsA+=a.bid;stats.bidsB+=b.bid;
+      const out=advancePractice(game,a);
+      stats.moves+=out.events.filter(e=>e==="unit_moved").length;
+      stats.attacks+=out.events.filter(e=>e==="unit_attacked").length;
+      assert(out.events.filter(e=>e==="unit_moved").length<=4);
+      assert(out.events.filter(e=>e==="unit_attacked").length<=2);
+    }
+    assert(game.finished);
+    stats[game.finished.winner]++;
+    stats.rounds+=game.round;
+    if(game.round===game.state.roundCap)stats.caps++;
+  }
+  assert(stats.secondA>0&&stats.secondB>0);
+  assert(stats.bidsA>0&&stats.bidsB>0);
+  assert(stats.attacks>0&&stats.moves>0);
+  console.log("FRONTIER_V3_SIGHT_COHORT",JSON.stringify(stats));
 });

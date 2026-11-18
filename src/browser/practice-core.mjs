@@ -40,6 +40,9 @@ export const PRACTICE_TOPOLOGIES=Object.freeze({
   balanced61:"hexawars-balanced61-v1",
   frontier127:"hexawars-frontier127-v1",
 });
+function usesManeuver(economy){
+  return economy==="maneuver-v2"||economy==="maneuver-v3-vision";
+}
 export function newPractice(seed="practice-alpha-01",topology="legacy81",opponentPolicy="legacy-v1",economy="classic-v1"){
   if(typeof seed!=="string" || !/^[a-zA-Z0-9_-]{1,48}$/.test(seed)){
     throw new Error("Seed must be 1–48 letters, digits, underscores or dashes");
@@ -51,8 +54,8 @@ export function newPractice(seed="practice-alpha-01",topology="legacy81",opponen
     (opponentPolicy==="bid-aware-v1"&&topology!=="frontier127")){
     throw new Error("Unsupported opponent policy for this battlefield");
   }
-  if(!["classic-v1","maneuver-v2"].includes(economy) ||
-    (economy==="maneuver-v2" && topology!=="frontier127")){
+  if(!["classic-v1","maneuver-v2","maneuver-v3-vision"].includes(economy) ||
+    (usesManeuver(economy) && topology!=="frontier127")){
     throw new Error("Unsupported economy for this battlefield");
   }
   const encodedSeed=numericSeed(seed);
@@ -67,7 +70,9 @@ export function newPractice(seed="practice-alpha-01",topology="legacy81",opponen
   return {
     // Preserve exact legacy match IDs so seeded historical practice traces
     // remain replayable under their original rules, without reinterpretation.
-    matchId:economy==="maneuver-v2"
+    matchId:economy==="maneuver-v3-vision"
+      ?`practice:${PRACTICE_TOPOLOGIES[topology]}:maneuver-v3-vision:${opponentPolicy}:${seed}`
+      :economy==="maneuver-v2"
       ?`practice:${PRACTICE_TOPOLOGIES[topology]}:maneuver-v2:${opponentPolicy}:${seed}`
       :opponentPolicy==="bid-aware-v1"
       ?`practice:${PRACTICE_TOPOLOGIES[topology]}:bot-bid-aware-v1:${seed}`
@@ -77,10 +82,12 @@ export function newPractice(seed="practice-alpha-01",topology="legacy81",opponen
     ...(opponentPolicy==="bid-aware-v1"?{opponentPolicy}:{}),
     seed,
     topology,
-    rulesVersion:economy==="maneuver-v2"
+    rulesVersion:economy==="maneuver-v3-vision"
+      ? "hexawars-frontier127-maneuver-v3-vision"
+      :economy==="maneuver-v2"
       ? "hexawars-frontier127-maneuver-v2"
       : PRACTICE_TOPOLOGIES[topology],
-    ...(economy==="maneuver-v2"?{economy}:{}),
+    ...(usesManeuver(economy)?{economy}:{}),
     round:0,
     state:{
       turn:0,visible,units:getAllUnits(board),score:{a:0,b:0},
@@ -99,7 +106,8 @@ function ownUnits(game,side){
   return game.state.units.filter(u=>u.owner===side&&u.hp>0);
 }
 function knownEnemyUnits(game,side){
-  const seen=projectSeatObservation(game.state,side);
+  const seen=projectSeatObservation(game.state,side,
+    game.economy==="maneuver-v3-vision"?"cube-symmetric-v1":"legacy-v1");
   const enemy=new Map();
   for(const c of seen.visible){
     if(c.unit && c.unit.owner!==side&&c.unit.hp>0)enemy.set(c.unit.id,c.unit);
@@ -294,7 +302,7 @@ function checkedPlan(game,side,input){
   const budget=applyCarryover(side==="A"?game.budgetA:game.budgetB);
   if(!Number.isSafeInteger(orders.bid)||orders.bid<0||orders.bid>budget.apPool)
     throw new Error("Initiative bid exceeds available AP");
-  if(orders.move2 && game.economy!=="maneuver-v2")
+  if(orders.move2 && !usesManeuver(game.economy))
     throw new Error("Second move requires maneuver-v2");
   const plan={bid:orders.bid,extras:[]};
   for(const [slot,kind,choice] of [
@@ -320,7 +328,7 @@ function checkedPlan(game,side,input){
     else if(slot==="move2")plan.secondMove=fragment.freeMove;
     else plan.freeAction=fragment.freeAction;
   }
-  const result=game.economy==="maneuver-v2"
+  const result=usesManeuver(game.economy)
     ?validateFrontierRoundPlan(plan,side,game.state,budget)
     :validateRoundPlan(plan,side,game.state,budget);
   if(!result.ok)throw new Error("Plan rejected: "+result.reason);
@@ -374,7 +382,7 @@ export function chooseBotRoundOrders(game,side="B"){
   }
   if(candidates.length)result[complement]=candidates[0];
 
-  if(game.economy==="maneuver-v2"){
+  if(usesManeuver(game.economy)){
     // The same number of squad orders is available to human and AI. A
     // second move uses a DIFFERENT unit and cannot silently overwrite or
     // collide with the first reserved move. Each candidate is checked
@@ -443,7 +451,7 @@ export function advancePractice(game,action){
   const planB=checkedPlan(game,"B",botOrders);
   const startingPositions=new Map(game.state.units.map(u=>
     [u.id,clonePos(u.position)]));
-  const resolve=game.economy==="maneuver-v2"?runFrontierRound:runRound;
+  const resolve=usesManeuver(game.economy)?runFrontierRound:runRound;
   const result=resolve({
     matchId:game.matchId,round:game.round,state:game.state,
     planA,planB,budgetA:game.budgetA,budgetB:game.budgetB,
@@ -456,7 +464,7 @@ export function advancePractice(game,action){
   // evidence against repeatedly choosing the same blocked destination.
   for(const [side,command] of [
     ["A",playerOrders.move],["B",botOrders.move],
-    ...(game.economy==="maneuver-v2"
+    ...(usesManeuver(game.economy)
       ? [["A",playerOrders.move2],["B",botOrders.move2]]
       : []),
   ]){
@@ -477,7 +485,7 @@ export function advancePractice(game,action){
     bot:describeOrders(botOrders),events,
     playerMove:playerOrders.move?structuredClone(playerOrders.move):null,
     botMove:botOrders.move?structuredClone(botOrders.move):null,
-    ...(game.economy==="maneuver-v2"?{
+    ...(usesManeuver(game.economy)?{
       playerMove2:playerOrders.move2?structuredClone(playerOrders.move2):null,
       botMove2:botOrders.move2?structuredClone(botOrders.move2):null,
     }:{}),
