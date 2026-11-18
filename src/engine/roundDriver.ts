@@ -8,6 +8,7 @@ import { resolveReserveTriggers } from "./round-resolver/triggers.ts";
 import { RANGE } from "./constants";
 import { distance } from "./coords";
 import { checkVictory } from "./victory";
+import { updateFrontierObjectives } from "./frontier-objectives.ts";
 import type {
   RunRoundInput,
   RunRoundResult,
@@ -51,10 +52,22 @@ export function runFrontierRoleRound(input:FrontierRunRoundInput):RunRoundResult
   return runRoundInternal(input,true,true);
 }
 
+/**
+ * Current, sole playable Frontier rule. The existing five-role v1 resolver
+ * remains frozen for archived games; objective capture is a new internal
+ * rules version, not a player-facing option.
+ */
+export function runFrontierObjectiveRound(input:FrontierRunRoundInput):RunRoundResult{
+  if(!input.state.frontierObjectiveHold)
+    throw new Error("Objective round requires the v2 Frontier match");
+  return runRoundInternal(input,true,true,true);
+}
+
 function runRoundInternal(
   input: RunRoundInput | FrontierRunRoundInput,
   maneuverV2: boolean,
   fiveRoles=false,
+  objectives=false,
 ): RunRoundResult {
   const order = resolveBids({
     matchId: input.matchId,
@@ -165,8 +178,13 @@ function runRoundInternal(
     ...refundEvents,
   ];
 
-  const nextState: MatchState = { ...secondAction.state, turn: input.round + 1 };
-  const victory = checkVictory(nextState);
+  const resolvedState: MatchState = { ...secondAction.state, turn: input.round + 1 };
+  // Ownership changes only after BOTH global moves, attacks and deaths.
+  // The same 5v5 objective update is shared by browser and live PvP.
+  const captured=objectives?updateFrontierObjectives(resolvedState):null;
+  if(captured)events.push(...captured.events);
+  const nextState=captured?.state??resolvedState;
+  const victory=checkVictory(nextState);
   return {
     events,
     nextState,

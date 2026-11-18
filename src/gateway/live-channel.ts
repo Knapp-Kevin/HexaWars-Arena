@@ -75,6 +75,11 @@ export class LiveAgentChannel implements AgentChannel {
       maxMoveSlots:2,maxFreeAttacks:1,
       visible: state.visible, units: state.units, score: state.score,
       deadline: state.deadline, roundCap: state.roundCap, budget,
+      ...(state.frontierObjectiveHold?{
+        objectiveHold:state.frontierObjectiveHold,objectiveTarget:3,
+        objectiveHoldRounds:3,
+        objectiveSites:state.frontierObjectiveSites??[],
+      }:{}),
       stances: state.stances, reserves: state.reserves,
     }));
   }

@@ -2,6 +2,8 @@ import type { PresenceTracker } from "../matchmaker/presence.ts";
 import type { RunnerResult } from "../runner/types.ts";
 import { LiveAgentChannel, LIVE_PROTOCOL_VERSION, type LiveSocket } from "./live-channel.ts";
 import { ACTIVE_FRONTIER_RULES_VERSION,ACTIVE_FRONTIER_TOPOLOGY } from "../engine/frontier-match.ts";
+import { FRONTIER_OBJECTIVES,FRONTIER_OBJECTIVE_HOLD_ROUNDS,
+  FRONTIER_OBJECTIVE_MAJORITY } from "../engine/frontier-objectives.ts";
 
 type Connected = {
   socket: LiveSocket & { close?: (code?: number, reason?: string) => void };
@@ -60,6 +62,9 @@ export class LiveConnections {
         topology:ACTIVE_FRONTIER_TOPOLOGY,boardCells:127,
         roles:["scout","raider","interceptor","siege","captain"],
         freeMoves:2,freeAttacks:1,
+        objectiveSites:FRONTIER_OBJECTIVES.map(c=>({...c})),
+        objectiveTarget:FRONTIER_OBJECTIVE_MAJORITY,
+        objectiveHoldRounds:FRONTIER_OBJECTIVE_HOLD_ROUNDS,
         // No deterministic seed while hidden board information is still private.
       }));
     }

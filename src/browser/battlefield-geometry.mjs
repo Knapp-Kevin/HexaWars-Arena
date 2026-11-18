@@ -169,6 +169,21 @@ function makeGeometry() {
       tri(bevel[i],rim[j],rim[i],shade(color,.50));
     }
 
+    // Strategic objective geometry is public, symmetrical and a persistent
+    // ownership indicator. The low raised annulus remains visible even with
+    // a squad standing on the center of the tile; it is not pickable UI.
+    if(cell.objective){
+      const objectiveColor=cell.controlledBy==="A" ? [2.17,.52,.91]
+        :cell.controlledBy==="B" ? [2.82,.37,.42] :[2.86,.79,.38];
+      const outside=ring(x,z,y+.035,HEX_RADIUS*.76);
+      const inside=ring(x,z,y+.035,HEX_RADIUS*.63);
+      for(let i=0;i<6;i++){
+        const j=(i+1)%6;
+        tri(outside[i],outside[j],inside[j],objectiveColor);
+        tri(outside[i],inside[j],inside[i],objectiveColor);
+      }
+    }
+
     // Deterministic terrain accents add visual information without changing
     // movement, fog, terrain meaning, damage or any authoritative rule.
     if(kind==="forest"){

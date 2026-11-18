@@ -9,8 +9,10 @@ import type { MatchState } from "../shared/types.ts";
 import { initFrontierBoard } from "./board.ts";
 import { placeFrontierRoleUnits,getAllUnits } from "./units.ts";
 import { ROUND_CAP } from "./constants.ts";
+import { markFrontierObjectives } from "./frontier-objectives.ts";
 
-export const ACTIVE_FRONTIER_RULES_VERSION = "hexawars-frontier127-five-roles-v1";
+export const ARCHIVED_FRONTIER_ROLES_VERSION = "hexawars-frontier127-five-roles-v1";
+export const ACTIVE_FRONTIER_RULES_VERSION = "hexawars-frontier127-objectives-v2";
 export const ACTIVE_FRONTIER_TOPOLOGY = "frontier127";
 
 /** FNV-1a seed hashing exactly as the existing match/practice v1 codec. */
@@ -40,5 +42,18 @@ export function createFrontierRoleMatch(seed:string):MatchState{
     deadline:120000,
     roundCap:ROUND_CAP,
     frontierRaiderStrikes:[],
+  };
+}
+
+/**
+ * Current one-game constructor. Old createFrontierRoleMatch is frozen as
+ * five-role v1 replay identity; no past match gains objectives retroactively.
+ */
+export function createFrontierObjectiveMatch(seed:string):MatchState{
+  const old=createFrontierRoleMatch(seed);
+  return {
+    ...old,
+    visible:markFrontierObjectives(old.visible),
+    frontierObjectiveHold:{a:0,b:0},
   };
 }

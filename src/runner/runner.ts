@@ -1,9 +1,9 @@
 import type { Database } from "bun:sqlite";
 import type { MatchRecord, MatchState, AgentRoundBudget, RoundPlan } from "../shared/types.ts";
 import {
-  createFrontierRoleMatch,ACTIVE_FRONTIER_RULES_VERSION,ACTIVE_FRONTIER_TOPOLOGY,
+  createFrontierObjectiveMatch,ACTIVE_FRONTIER_RULES_VERSION,ACTIVE_FRONTIER_TOPOLOGY,
 } from "../engine/frontier-match.ts";
-import { runFrontierRoleRound } from "../engine/roundDriver.ts";
+import { runFrontierObjectiveRound } from "../engine/roundDriver.ts";
 import { newBudget, PASS_PLAN, applyCarryover } from "../engine/round-state.ts";
 import { ROUND_CAP } from "../engine/constants.ts";
 import { validateFrontierRoundPlan } from "../gateway/frontier-round-validator.ts";
@@ -141,7 +141,7 @@ export class MatchRunner {
 
     // New competitive matches use the identical Frontier127 five-role source
     // as public practice. Historical 81-cell createMatch remains replay-only.
-    let state: MatchState = createFrontierRoleMatch(ctx.seed);
+    let state: MatchState = createFrontierObjectiveMatch(ctx.seed);
     let budgetA: AgentRoundBudget = newBudget();
     let budgetB: AgentRoundBudget = newBudget();
     let round = 0;
@@ -221,7 +221,7 @@ export class MatchRunner {
         return complete(this.endInvalidPlan(ctx.matchId, ctx.a.id, "B", invalidB.reason));
       }
 
-      const result = runFrontierRoleRound({
+      const result = runFrontierObjectiveRound({
         matchId: ctx.matchId, round, state,
         planA, planB, budgetA, budgetB,
       });

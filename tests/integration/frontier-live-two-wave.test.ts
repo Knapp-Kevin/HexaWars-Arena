@@ -5,7 +5,7 @@ import {createOperator} from "../../src/identity/operator.ts";
 import {registerAgentVersion} from "../../src/identity/agent-version.ts";
 import {MatchRunner} from "../../src/runner/runner.ts";
 import {LiveAgentChannel,LIVE_PROTOCOL_VERSION} from "../../src/gateway/live-channel.ts";
-import {createFrontierRoleMatch,ACTIVE_FRONTIER_RULES_VERSION} from "../../src/engine/frontier-match.ts";
+import {createFrontierObjectiveMatch,ACTIVE_FRONTIER_RULES_VERSION} from "../../src/engine/frontier-match.ts";
 import {validateFrontierRoundPlan} from "../../src/gateway/frontier-round-validator.ts";
 import {newBudget} from "../../src/engine/round-state.ts";
 import {streamEvents,getMatch} from "../../src/persistence/match-store.ts";
@@ -69,7 +69,7 @@ describe("real Frontier match runner executes identical 5v5 two-wave plans as br
   test("two separate auth-bound live agents get private Scout vision; second wave persists to replay",async()=>{
     const auth=dbAndIdentities();dbs.push(auth.db);
     const seed="frontier-live-two-waves",matchId="live-frontier-two-wave";
-    const planA=legalTwoMoves(createFrontierRoleMatch(seed));
+    const planA=legalTwoMoves(createFrontierObjectiveMatch(seed));
     const receivedA:Record<string,unknown>[]=[],receivedB:Record<string,unknown>[]=[];
     const a=responder(matchId,"A",planA,receivedA);
     const b=responder(matchId,"B",pass,receivedB);
@@ -88,6 +88,7 @@ describe("real Frontier match runner executes identical 5v5 two-wave plans as br
       expect((first.visible as unknown[]).length).toBeLessThan(127);
       expect(first.protocolVersion).toBe(LIVE_PROTOCOL_VERSION);
       expect(first.rulesVersion).toBe(ACTIVE_FRONTIER_RULES_VERSION);
+      expect((first.objectiveHold as {a:number;b:number})).toEqual({a:0,b:0});
       expect(JSON.stringify(frames)).not.toContain(seed);
       expect(JSON.stringify(frames)).not.toContain("frontierRaiderStrikes");
     }
@@ -106,7 +107,7 @@ describe("real Frontier match runner executes identical 5v5 two-wave plans as br
   test("malicious duplicate unit in second wave causes canonical invalid-plan loss, never executes",async()=>{
     const auth=dbAndIdentities();dbs.push(auth.db);
     const seed="frontier-live-forged-wave",matchId="live-frontier-invalid";
-    const planA=legalTwoMoves(createFrontierRoleMatch(seed));
+    const planA=legalTwoMoves(createFrontierObjectiveMatch(seed));
     const aFrames:Record<string,unknown>[]=[];
     const a=responder(matchId,"A",planA,aFrames,true);
     const b=responder(matchId,"B",pass,[]);

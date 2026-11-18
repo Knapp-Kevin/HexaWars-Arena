@@ -6,6 +6,8 @@ const $=id=>document.getElementById(id);
 const el={
   map:$("battle-map"),roster:$("squad-roster"),ready:$("ready-screen"),start:$("start-battle"),
   round:$("round-label"),blue:$("score-blue"),red:$("score-red"),
+  objectiveBar:$("objective-score"),objectiveBlue:$("objective-blue"),
+  objectiveRed:$("objective-red"),objectiveHold:$("objective-hold"),
   selected:$("selected-name"),command:$("command-label"),instruction:$("instruction"),
   notice:$("notice"),event:$("event-label"),commit:$("commit-round"),
   plannedMove:$("planned-move"),plannedMove2:$("planned-move2"),
@@ -337,9 +339,12 @@ function draw(){
     const role=choice?.kind==="attack"?"attack":choice?"available":"";
     const label="Hex "+cell.q+","+cell.r+": "+(piece?
       (piece.side==="A"?"Blue ":"Red ")+piece.type+", "+piece.hp+" health":
-      cell.terrain)+(choice?", "+choice.kind+" available":"");
+      cell.terrain)+(cell.objective?(", control site: "+
+      (cell.controlledBy==="A"?"Blue":cell.controlledBy==="B"?"Red":"neutral")):"")+
+      (choice?", "+choice.kind+" available":"");
     const node=create("g",{
-      class:"cell "+role+" "+(pending?"queued ":"")+(selected?"selected":""),
+      class:"cell "+role+" "+(cell.objective?"objective ":"")+
+        (pending?"queued ":"")+(selected?"selected":""),
       tabindex:0,role:"button","aria-label":label,
       "data-q":cell.q,"data-r":cell.r,
     });
@@ -349,6 +354,21 @@ function draw(){
         (cy+RADIUS*.96*Math.sin(a)).toFixed(2);
     }).join(" ");
     node.append(create("polygon",{class:"hex",points:corners,fill:colors[cell.terrain]??colors.plain}));
+    if(cell.objective){
+      const border=cell.controlledBy==="A"?"#8cc5ff":
+        cell.controlledBy==="B"?"#ffa0a0":"#ffde96";
+      const objectiveCorners=Array.from({length:6},(_,i)=>{
+        const angle=i*Math.PI/3;
+        return (cx+RADIUS*.74*Math.cos(angle)).toFixed(2)+","+
+          (cy+RADIUS*.74*Math.sin(angle)).toFixed(2);
+      }).join(" ");
+      node.append(create("polygon",{class:"objective-ring",
+        points:objectiveCorners,stroke:border,fill:"none",
+        "stroke-width":"4","pointer-events":"none"}));
+      node.append(create("circle",{class:"objective-beacon",cx,cy:cy-RADIUS*.72,
+        r:4.2,fill:border,stroke:"#0b2033","stroke-width":1,
+        "pointer-events":"none"}));
+    }
     if(cell.terrain==="forest"){
       node.append(create("path",{d:"M "+(cx-11)+" "+(cy+5)+" l 11 -20 11 20 z",
         fill:"#194337","pointer-events":"none"}));
@@ -412,6 +432,15 @@ function render(){
     : "ROUND "+(current.round+1)+" / "+current.roundCap;
   el.blue.textContent=String(current.blue);
   el.red.textContent=String(current.red);
+  el.objectiveBar.hidden=!current.objectives;
+  if(current.objectives){
+    const o=current.objectives;
+    el.objectiveBlue.textContent="BLUE "+o.blue+"/"+o.total;
+    el.objectiveRed.textContent="RED "+o.red+"/"+o.total;
+    el.objectiveHold.textContent="HOLD "+
+      Math.max(o.holdBlue,o.holdRed)+"/"+o.holdRequired+
+      " · NEED "+o.required+"/"+o.total;
+  }
   if(current.ended){
     const names={A:"Victory",B:"Defeat",draw:"Draw"};
     const reasons={

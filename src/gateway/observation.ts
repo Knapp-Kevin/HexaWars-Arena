@@ -27,6 +27,7 @@ export function projectSeatObservation(
     position: { ...cell.position },
     terrain: cell.terrain,
     controlledBy: cell.controlledBy,
+    ...(cell.frontierObjective?{frontierObjective:true as const}:{}),
     unit: unitsByCoord.get(coordKey(cell.position)),
   }));
   const sight=vision==="frontier-five-roles-v1"
@@ -45,6 +46,15 @@ export function projectSeatObservation(
     })),
     units: friendly.map((unit) => ({ ...unit, position: { ...unit.position } })),
     score: { ...state.score },
+    ...(state.frontierObjectiveHold?{
+      frontierObjectiveHold:{...state.frontierObjectiveHold},
+      // Ownership of five authored points is public strategic information;
+      // disclose it equally without revealing any other fogged hex or enemy
+      // unit. Browser practice already displays these same five control rings.
+      frontierObjectiveSites:board.filter(c=>c.frontierObjective).map(c=>({
+        position:{...c.position},owner:c.controlledBy??null,
+      })),
+    }:{}),
     deadline: state.deadline,
     roundCap: state.roundCap,
     // Hidden enemy prepared actions are never part of a seat observation.

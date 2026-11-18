@@ -11,7 +11,7 @@
 import { initBoard, initHexDiskBoard, initFrontierBoard } from "./rules/engine/board.js";
 import { placeStartingUnits, placeFrontierUnits, getAllUnits } from "./rules/engine/units.js";
 import { newBudget, applyCarryover } from "./rules/engine/round-state.js";
-import { runRound,runFrontierRound,runFrontierRoleRound } from "./rules/engine/roundDriver.js";
+import { runRound,runFrontierRound,runFrontierRoleRound,runFrontierObjectiveRound } from "./rules/engine/roundDriver.js";
 import { checkVictory } from "./rules/engine/victory.js";
 import { validateRoundPlan } from "./rules/gateway/validator.js";
 import { validateFrontierRoundPlan } from "./rules/gateway/frontier-round-validator.js";
@@ -19,7 +19,10 @@ import { projectSeatObservation } from "./rules/gateway/observation.js";
 import { MOVE_POINTS, FRONTIER_ROLE_MOVE_POINTS, RANGE, ROUND_CAP } from "./rules/engine/constants.js";
 import { FRONTIER_ROLE_SPECIALS } from "./rules/engine/frontier-role-combat.js";
 import { distance } from "./rules/engine/coords.js";
-import {createFrontierRoleMatch,numericFrontierSeed,ACTIVE_FRONTIER_RULES_VERSION} from "./rules/engine/frontier-match.js";
+import {createFrontierRoleMatch,createFrontierObjectiveMatch,numericFrontierSeed,
+  ACTIVE_FRONTIER_RULES_VERSION,ARCHIVED_FRONTIER_ROLES_VERSION} from "./rules/engine/frontier-match.js";
+import { FRONTIER_OBJECTIVES,FRONTIER_OBJECTIVE_MAJORITY,FRONTIER_OBJECTIVE_HOLD_ROUNDS }
+  from "./rules/engine/frontier-objectives.js";
 
 const PASS = Object.freeze({ bid: 0, extras: [] });
 const SIDES = new Set(["A","B"]);
@@ -39,7 +42,7 @@ export const PRACTICE_TOPOLOGIES=Object.freeze({
 });
 function usesManeuver(economy){
   return economy==="maneuver-v2"||economy==="maneuver-v3-vision"||
-    economy==="frontier-five-roles-v1";
+    economy==="frontier-five-roles-v1"||economy==="frontier-five-roles-v2";
 }
 export function newPractice(seed="practice-alpha-01",topology="legacy81",opponentPolicy="legacy-v1",economy="classic-v1"){
   if(typeof seed!=="string" || !/^[a-zA-Z0-9_-]{1,48}$/.test(seed)){
@@ -52,15 +55,17 @@ export function newPractice(seed="practice-alpha-01",topology="legacy81",opponen
     (opponentPolicy==="bid-aware-v1"&&topology!=="frontier127")){
     throw new Error("Unsupported opponent policy for this battlefield");
   }
-  if(!["classic-v1","maneuver-v2","maneuver-v3-vision","frontier-five-roles-v1"].includes(economy) ||
+  if(!["classic-v1","maneuver-v2","maneuver-v3-vision","frontier-five-roles-v1","frontier-five-roles-v2"].includes(economy) ||
     (usesManeuver(economy) && topology!=="frontier127")){
     throw new Error("Unsupported economy for this battlefield");
   }
   const encodedSeed=numericSeed(seed);
   // New Frontier sessions use exactly ONE shared server+browser constructor.
   // Historical games retain their original deterministic map/role algorithms.
-  const authoritative=economy==="frontier-five-roles-v1"
-    ?createFrontierRoleMatch(seed):null;
+  const authoritative=economy==="frontier-five-roles-v2"
+    ?createFrontierObjectiveMatch(seed)
+    :economy==="frontier-five-roles-v1"
+      ?createFrontierRoleMatch(seed):null;
   const board=authoritative?null:topology==="frontier127"
     ?initFrontierBoard(encodedSeed)
     :topology==="balanced61"
@@ -74,7 +79,9 @@ export function newPractice(seed="practice-alpha-01",topology="legacy81",opponen
   return {
     // Preserve exact legacy match IDs so seeded historical practice traces
     // remain replayable under their original rules, without reinterpretation.
-    matchId:economy==="frontier-five-roles-v1"
+    matchId:economy==="frontier-five-roles-v2"
+      ?`practice:${PRACTICE_TOPOLOGIES[topology]}:frontier-five-roles-v2:${opponentPolicy}:${seed}`
+      :economy==="frontier-five-roles-v1"
       ?`practice:${PRACTICE_TOPOLOGIES[topology]}:frontier-five-roles-v1:${opponentPolicy}:${seed}`
       :economy==="maneuver-v3-vision"
       ?`practice:${PRACTICE_TOPOLOGIES[topology]}:maneuver-v3-vision:${opponentPolicy}:${seed}`
@@ -88,8 +95,10 @@ export function newPractice(seed="practice-alpha-01",topology="legacy81",opponen
     ...(opponentPolicy==="bid-aware-v1"?{opponentPolicy}:{}),
     seed,
     topology,
-    rulesVersion:economy==="frontier-five-roles-v1"
+    rulesVersion:economy==="frontier-five-roles-v2"
       ?ACTIVE_FRONTIER_RULES_VERSION
+      :economy==="frontier-five-roles-v1"
+      ?ARCHIVED_FRONTIER_ROLES_VERSION
       :economy==="maneuver-v3-vision"
       ? "hexawars-frontier127-maneuver-v3-vision"
       :economy==="maneuver-v2"
@@ -110,7 +119,8 @@ export function newPractice(seed="practice-alpha-01",topology="legacy81",opponen
   };
 }
 
-function isFiveRoleGame(game){return game.economy==="frontier-five-roles-v1";}
+function isFiveRoleGame(game){return game.economy==="frontier-five-roles-v1"||
+  game.economy==="frontier-five-roles-v2";}
 function unitMoveRange(game,unit){
   return (isFiveRoleGame(game)?FRONTIER_ROLE_MOVE_POINTS:MOVE_POINTS)[unit.type]??1;
 }
@@ -119,7 +129,7 @@ function ownUnits(game,side){
 }
 function knownEnemyUnits(game,side){
   const seen=projectSeatObservation(game.state,side,
-    game.economy==="frontier-five-roles-v1"?"frontier-five-roles-v1"
+    isFiveRoleGame(game)?"frontier-five-roles-v1"
       :game.economy==="maneuver-v3-vision"?"cube-symmetric-v1":"legacy-v1");
   const enemy=new Map();
   for(const c of seen.visible){
@@ -143,17 +153,26 @@ export function practiceView(game,side="A"){
     board:game.state.visible.map(c=>({
       q:c.position.q,r:c.position.r,terrain:c.terrain,
       controlledBy:c.controlledBy??null,
+      ...(c.frontierObjective?{objective:true}:{}),
     })),
     units:[...own,...opponents].map(u=>({
       id:u.id,side:u.owner,q:u.position.q,r:u.position.r,
       hp:u.hp,strength:u.strength,type:u.type,
       moveRange:unitMoveRange(game,u),attackRange:RANGE[u.type],
-      ...(game.economy==="frontier-five-roles-v1"
+      ...(isFiveRoleGame(game)
         ?{special:FRONTIER_ROLE_SPECIALS[u.type]??""}:{}),
     })),
     // Public scoreboard totals reveal counts, not concealed positions/HP.
     blue:game.state.units.filter(u=>u.owner==="A"&&u.hp>0).length,
     red:game.state.units.filter(u=>u.owner==="B"&&u.hp>0).length,
+    ...(game.state.frontierObjectiveHold?{
+      objectives:{total:FRONTIER_OBJECTIVES.length,
+        required:FRONTIER_OBJECTIVE_MAJORITY,
+        holdRequired:FRONTIER_OBJECTIVE_HOLD_ROUNDS,
+        blue:game.state.score.a,red:game.state.score.b,
+        holdBlue:game.state.frontierObjectiveHold.a,
+        holdRed:game.state.frontierObjectiveHold.b},
+    }:{}),
     ended:victory?{...victory}:null,
   };
 }
@@ -226,7 +245,7 @@ export function legalCommands(game,side,unitId,stagedMove=null,existingOrders=nu
   }
   for(const enemy of knownEnemyUnits(game,side)){
     if(distance(stagedOrigin,enemy.position) <= (RANGE[unit.type]??1) &&
-      !(game.economy==="frontier-five-roles-v1"&&
+      !(isFiveRoleGame(game)&&
         unit.type==="siege"&&stagedFragment)){
       const cmd={kind:"attack",unitId,to:clonePos(enemy.position)};
       const trial=planForAction(unit,cmd);
@@ -280,8 +299,10 @@ export function chooseBotAction(game,side="B"){
   // Enemy positions are only those provided by the seat observation above.
   const terrainByCoord=new Map(game.state.visible.map(c=>[key(c.position),c]));
   const center={q:0,r:0,s:0};
+  const objectiveMode=game.economy==="frontier-five-roles-v2";
   const targets=game.state.visible.filter(c=>
-    c.controlledBy!==side && c.terrain!=="mountain" && c.terrain!=="water");
+    c.controlledBy!==side && c.terrain!=="mountain" && c.terrain!=="water" &&
+    (!objectiveMode||c.frontierObjective===true));
   function nearest(pos,points){
     if(!points.length)return 0;
     return Math.min(...points.map(x=>distance(pos,x.position??x)));
@@ -299,9 +320,18 @@ export function chooseBotAction(game,side="B"){
       : distance(unit.position,center)-distance(action.to,center);
     const territoryProgress=
       nearest(unit.position,targets)-nearest(action.to,targets);
-    let score=pursuit*9+territoryProgress*2;
-    if(destination?.controlledBy!==side)score+=12;
-    if(destination?.controlledBy===side)score-=3;
+    let score=objectiveMode
+      ?pursuit*2+territoryProgress*22
+      :pursuit*9+territoryProgress*2;
+    if(objectiveMode){
+      if(destination?.frontierObjective&&destination.controlledBy!==side)
+        score+=35;
+      if(destination?.frontierObjective&&destination.controlledBy===side)
+        score-=18;
+    }else{
+      if(destination?.controlledBy!==side)score+=12;
+      if(destination?.controlledBy===side)score-=3;
+    }
     score-=visitCount*14;
     if(reversal)score-=50;
     // Spread advances among squads rather than repeatedly moving one scout.
@@ -371,7 +401,7 @@ function checkedPlan(game,side,input){
   }
   const result=usesManeuver(game.economy)
     ?validateFrontierRoundPlan(plan,side,game.state,budget,
-      game.economy==="frontier-five-roles-v1")
+      isFiveRoleGame(game))
     :validateRoundPlan(plan,side,game.state,budget);
   if(!result.ok)throw new Error("Plan rejected: "+result.reason);
   return plan;
@@ -413,8 +443,14 @@ export function chooseBotRoundOrders(game,side="B"){
       const unit=own.find(u=>u.id===choice.unitId);
       const visits=trail.filter(t=>t.unitId===choice.unitId);
       const repeats=visits.filter(t=>t.to===key(choice.to)).length;
-      const progress=distance(unit.position,center)-distance(choice.to,center);
-      return progress*8-repeats*16-visits.length*.5;
+      const objectives=game.economy==="frontier-five-roles-v2"
+        ?game.state.visible.filter(c=>c.frontierObjective&&c.controlledBy!==side):[];
+      const progress=objectives.length
+        ?Math.min(...objectives.map(c=>distance(unit.position,c.position)))-
+          Math.min(...objectives.map(c=>distance(choice.to,c.position)))
+        :distance(unit.position,center)-distance(choice.to,center);
+      const arrival=objectives.some(c=>exactlySame(c.position,choice.to))?30:0;
+      return progress*10+arrival-repeats*16-visits.length*.5;
     }
     candidates.sort((a,b)=>score(b)-score(a)||
       a.unitId.localeCompare(b.unitId)||a.to.q-b.to.q||a.to.r-b.to.r);
@@ -440,11 +476,17 @@ export function chooseBotRoundOrders(game,side="B"){
           previous.to===key(unit.position));
       });
     const middle={q:0,r:0,s:0};
+    const objectiveTargets=game.economy==="frontier-five-roles-v2"
+      ?game.state.visible.filter(c=>c.frontierObjective&&c.controlledBy!==side):[];
+    const progress=move=>{
+      const unit=own.find(u=>u.id===move.unitId);
+      const locations=objectiveTargets.length?objectiveTargets.map(c=>c.position):[middle];
+      const nearest=pos=>Math.min(...locations.map(loc=>distance(pos,loc)));
+      return nearest(unit.position)-nearest(move.to)+
+        (objectiveTargets.some(c=>exactlySame(c.position,move.to))?2:0);
+    };
     moves.sort((a,b)=>
-      (distance(own.find(u=>u.id===b.unitId).position,middle)-
-        distance(b.to,middle))-
-      (distance(own.find(u=>u.id===a.unitId).position,middle)-
-        distance(a.to,middle))||
+      progress(b)-progress(a)||
       a.unitId.localeCompare(b.unitId)||a.to.q-b.to.q||a.to.r-b.to.r);
     for(const move2 of moves){
       try{
@@ -493,8 +535,10 @@ export function advancePractice(game,action){
   const planB=checkedPlan(game,"B",botOrders);
   const startingPositions=new Map(game.state.units.map(u=>
     [u.id,clonePos(u.position)]));
-  const resolve=game.economy==="frontier-five-roles-v1"
-    ?runFrontierRoleRound:usesManeuver(game.economy)?runFrontierRound:runRound;
+  const resolve=game.economy==="frontier-five-roles-v2"
+    ?runFrontierObjectiveRound
+    :game.economy==="frontier-five-roles-v1"
+      ?runFrontierRoleRound:usesManeuver(game.economy)?runFrontierRound:runRound;
   const result=resolve({
     matchId:game.matchId,round:game.round,state:game.state,
     planA,planB,budgetA:game.budgetA,budgetB:game.budgetB,

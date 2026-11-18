@@ -23,6 +23,8 @@ export interface HexCell {
   position: CubeCoord;
   terrain: "plain" | "forest" | "mountain" | "water";
   controlledBy?: "A" | "B";
+  /** Public strategic tile in Frontier objectives v2 only. */
+  frontierObjective?: true;
   unit?: Unit;
 }
 
@@ -37,6 +39,14 @@ export interface MatchState {
    * This is absent from all archived v1/v2/v3 matches.
    */
   frontierRaiderStrikes?: string[];
+  /** Objectives v2 only. Count consecutive end-of-round majorities, never
+   * invent the score from a client-supplied observation. */
+  frontierObjectiveHold?: { a: number; b: number };
+  /** Seat observation only: globally public owner of every authored site,
+   * never unit coordinates, private actions or a concealed map seed. */
+  frontierObjectiveSites?: Array<{
+    position: CubeCoord; owner: "A" | "B" | null;
+  }>;
   /** Plan D Phase 4: active stances, keyed by appliesOnRound */
   stances?: StanceRecord[];
   /** Plan D Phase 4: active reserves */

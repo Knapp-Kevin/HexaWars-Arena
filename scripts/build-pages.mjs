@@ -87,6 +87,7 @@ const ruleSources = [
   "engine/combat.ts", "engine/round-state.ts", "engine/roundDriver.ts",
   "engine/victory.ts", "engine/fog.ts", "engine/fog-corrected.ts",
   "engine/frontier-role-combat.ts", "engine/frontier-match.ts",
+  "engine/frontier-objectives.ts",
   "engine/round-resolver/extras.ts", "engine/round-resolver/triggers.ts",
   "gateway/observation.ts", "gateway/validator.ts",
   "gateway/frontier-round-validator.ts",

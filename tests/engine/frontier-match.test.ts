@@ -1,5 +1,6 @@
 import {describe,it,expect} from "bun:test";
-import {createFrontierRoleMatch,numericFrontierSeed,ACTIVE_FRONTIER_RULES_VERSION} from "../../src/engine/frontier-match.ts";
+import {createFrontierRoleMatch,createFrontierObjectiveMatch,numericFrontierSeed,
+  ARCHIVED_FRONTIER_ROLES_VERSION,ACTIVE_FRONTIER_RULES_VERSION} from "../../src/engine/frontier-match.ts";
 import {createMatch} from "../../src/engine/match.ts";
 import {projectSeatObservation} from "../../src/gateway/observation.ts";
 import {FRONTIER_ROLES} from "../../src/engine/units.ts";
@@ -10,11 +11,13 @@ describe("one authoritative Frontier match source for every live surface",()=>{
     const seed="frontier-parity-41";
     expect(numericFrontierSeed(seed)).toBeGreaterThan(0);
     expect(numericFrontierSeed(seed)).toBe(numericFrontierSeed(seed));
-    expect(ACTIVE_FRONTIER_RULES_VERSION).toBe("hexawars-frontier127-five-roles-v1");
+    expect(ARCHIVED_FRONTIER_ROLES_VERSION).toBe("hexawars-frontier127-five-roles-v1");
+    expect(ACTIVE_FRONTIER_RULES_VERSION).toBe("hexawars-frontier127-objectives-v2");
     expect(createMatch(seed).visible.length).toBe(81);
     expect(createMatch(seed).units.length).toBe(6);
     expect(createFrontierRoleMatch(seed).visible.length).toBe(127);
     expect(createFrontierRoleMatch(seed).units.length).toBe(10);
+    expect(createFrontierObjectiveMatch(seed).visible.filter(c=>c.frontierObjective).length).toBe(5);
     expect(()=>createFrontierRoleMatch("")).toThrow("Match seed required");
   });
   it("generates equal 127-cell five-role armies in 64 seeded deployments",()=>{

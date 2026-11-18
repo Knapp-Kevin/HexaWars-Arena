@@ -24,7 +24,13 @@
     main{padding-top:10px;display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,290px);gap:12px}
     .stage,.panel{background:#0c1a29;border:1px solid #355470;border-radius:15px;box-shadow:0 16px 35px #0006}
     .stage{padding:10px;min-width:0;position:relative}
-    .gamebar{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:2px 6px 10px}
+    .gamebar{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:2px 6px 7px}
+    .game-status{min-width:0;flex:1 1 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+    .objective-bar{display:flex;gap:8px;justify-content:center;align-items:center;
+      max-width:100%;margin:0;padding:2px 6px;border-radius:9px;
+      background:#102b3d;color:#ebd8a5;font-size:11px;font-weight:800;text-align:center;white-space:nowrap}
+    .objective-bar[hidden]{display:none}
+    .objective-bar .blue{color:#8ec8ff}.objective-bar .red{color:#ff9a9d}
     .faction{display:inline-flex;gap:8px;align-items:center;font-size:12px;font-weight:850;letter-spacing:.04em}
     .faction strong{border-radius:7px;background:#173750;padding:6px 9px;font-size:17px;color:white}
     .faction.blue{color:#80bcfc}.faction.red{color:#fc8e91}
@@ -75,7 +81,9 @@
       nav{gap:10px;font-size:12px}
       main{display:flex;flex-direction:column;gap:9px;padding-top:7px}
       .stage{padding:5px;border-radius:9px}
-      .gamebar{padding:3px 5px 7px}
+      .gamebar{padding:1px 5px 4px;gap:3px}
+      .game-status{gap:1px}
+      .objective-bar{font-size:9px;gap:3px;padding:2px 4px}
       .faction{gap:4px;font-size:10px}
       .faction strong{padding:4px 7px;font-size:13px}
       .round{font-size:11px}
@@ -308,7 +316,14 @@
     <section class="stage" aria-label="Playable tactical arena">
       <div class="gamebar">
         <div class="faction blue">BLUE <strong id="score-blue">3</strong></div>
-        <div id="round-label" class="round" aria-live="polite">LOCAL PRACTICE</div>
+        <div class="game-status">
+          <div id="round-label" class="round" aria-live="polite">LOCAL PRACTICE</div>
+          <div id="objective-score" class="objective-bar" hidden role="status" aria-live="polite">
+            <span class="blue" id="objective-blue">BLUE 0/5</span>
+            <span id="objective-hold">CAPTURE 3 · HOLD 3</span>
+            <span class="red" id="objective-red">RED 0/5</span>
+          </div>
+        </div>
         <div class="faction red">RED <strong id="score-red">3</strong></div>
       </div>
       <div class="arena">
@@ -329,7 +344,8 @@
               Five unique roles, one Frontier battlefield. Outsmart Red.</p>
             <p class="battle-identity">FRONTIER · 127 HEXES · 5 VS 5</p>
             <p>One battlefield. Two squad moves and one attack each round.
-              Each army gets the same commands and initiative budget.</p>
+              Each army gets the same commands and initiative budget.
+              Claim three of five marked control sites and hold them for three rounds to win.</p>
             <button id="start-battle" type="button">Start battle</button>
           </div>
         </div>

@@ -1,3 +1,12 @@
+> **Historical design note (2026-11-18):** This source records the
+> original 60%-of-map territorial idea. The single active Frontier127
+> five-unit game now uses five authored, symmetric capture sites with a
+> three-of-five, three-round hold victory. That addresses the former
+> mathematically unreachable transient 77/127-cell threshold. The
+> authoritative implementation contract is
+> [FRONTIER_OBJECTIVES.md](FRONTIER_OBJECTIVES.md). Historical mechanics
+> below are preserved as source evidence, not selectable game variants.
+>
 # HexaWars Arena UI Specification
 
 **Status**: Frozen — no implementation until this document is audited and sealed.
