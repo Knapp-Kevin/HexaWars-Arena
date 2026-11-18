@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createMatch } from "../src/engine/match.ts";
+import { practiceScene, projectWorldToScreen } from "../src/browser/practice-3d.mjs";
 import { resolveCombat } from "../src/engine/combat.ts";
 import { checkVictory } from "../src/engine/victory.ts";
 import { validateRoundPlan } from "../dist/pages/rules/gateway/validator.js";
@@ -248,4 +249,29 @@ test("200-seed deterministic bot cohort avoids reverse-movement deadlocks",()=>{
     ...stats,averageRounds:Number((stats.rounds/stats.matches).toFixed(2)),
     cappedSeeds:worst,
   }));
+});
+
+test("3D practice view preserves the exact public unit projection and hex map",()=>{
+  const game=newPractice("cohort-013");
+  const publicView=practiceView(game,"A");
+  const scene=practiceScene(publicView);
+  assert.equal(scene.board.cells.length,81);
+  assert.equal(scene.board.units.length,publicView.units.length);
+  assert.deepEqual(scene.board.cells,publicView.board);
+  assert.deepEqual(scene.board.units,publicView.units);
+  assert.throws(()=>practiceScene({board:null,units:[]}),/Invalid public/);
+  assert.throws(()=>practiceScene({board:[],units:null}),/Invalid public/);
+});
+test("3D picking projection is finite and screen-space consistent",()=>{
+  const identity=new Float32Array([
+    1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1,
+  ]);
+  assert.deepEqual(projectWorldToScreen(identity,[0,0,0],100,80),
+    {x:50,y:40,visible:true});
+  assert.deepEqual(projectWorldToScreen(identity,[.5,-.5,0],100,80),
+    {x:75,y:60,visible:true});
+  assert.equal(projectWorldToScreen(identity,[2,0,0],100,80)?.visible,false);
+  const behind=new Float32Array(identity);
+  behind[15]=-1;
+  assert.equal(projectWorldToScreen(behind,[0,0,0],100,80),null);
 });
