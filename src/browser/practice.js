@@ -14,7 +14,7 @@ const el={
   clearMove:$("clear-move"),clearAttack:$("clear-attack"),
   bidAmount:$("bid-amount"),bidBudget:$("bid-budget"),
   pass:$("skip-round"),victory:$("victory"),result:$("result"),
-  resultDetail:$("result-detail"),newBattle:$("new-battle"),changeArena:$("change-arena"),
+  resultDetail:$("result-detail"),newBattle:$("new-battle"),
   threeD:$("game-3d"),threeDMarkers:$("game-3d-markers"),
   toggle3D:$("toggle-3d"),threeDTools:$("game-3d-tools"),
   zoomIn:$("game-3d-in"),zoomOut:$("game-3d-out"),resetView:$("game-3d-reset"),
@@ -401,15 +401,11 @@ function render(){
 async function startBattle(){
   updateBusy(true);status("Deploying squads…");
   try{
-    const topology=document.querySelector('input[name="arena-topology"]:checked')?.value??"frontier127";
-    const requestedEconomy=document.querySelector(
-      'input[name="command-economy"]:checked')?.value??"maneuver-v3-vision";
-    const economy=topology==="frontier127"?requestedEconomy:"classic-v1";
+    // Product rule: a single Frontier game, one command economy, no
+    // archived map/rules selection in human practice. Historical adapters
+    // remain in the engine solely for replay and regression tests.
     const reply=await request("START",{
-      seed:"local-"+crypto.randomUUID().slice(0,12),topology,economy,
-      // Only the new opponent profile bids intelligently; historical
-      // versioned local practice identities remain byte-identical.
-      opponentPolicy:topology==="frontier127"?"bid-aware-v1":"legacy-v1",
+      seed:"local-"+crypto.randomUUID().slice(0,12),
     });
     current=reply.state;selectedId=null;queued=null;options=[];
     rosterSignature="";
@@ -422,13 +418,7 @@ async function startBattle(){
     el.instruction.textContent=current.maxMoves===2
       ?"Two different Blue squads can move. Then queue one attack.":
       "Queue one move and one attack. You can revise each before resolving.";
-    const arenaName={frontier127:"Frontier · 127 hexes · five squads",
-      balanced61:"Balanced Hex · 61 hexes",legacy81:"Classic Arena · 81 hexes"};
-    el.event.textContent=(arenaName[current.topology]??"HexaWars")+
-      (current.maxMoves===2
-        ?" · Maneuver: 2 moves + 1 attack"+(current.economy==="maneuver-v3-vision"?" · Clear sight":"")
-        :"")+
-      (current.opponentPolicy==="bid-aware-v1"?" · Red AI contests initiative":" · Blue vs Red AI");
+    el.event.textContent="Frontier · 127 hexes · five squads each · 2 moves + 1 attack · Red AI";
     status("Your move. Select a blue squad.");
     render();
   }catch(e){status(String(e?.message||e));}
@@ -518,13 +508,6 @@ async function advance(action){
 }
 el.start.addEventListener("click",startBattle);
 el.newBattle.addEventListener("click",startBattle);
-el.changeArena.addEventListener("click",()=>{
-  if(busy)return;
-  el.victory.hidden=true;
-  el.ready.hidden=false;
-  el.threeDTools.hidden=true;el.roster.hidden=true;
-  el.start.focus();
-});
 el.commit.addEventListener("click",()=>{void advance({...orders});});
 async function clearMoveSlot(slot){
   if(busy||!current)return;
