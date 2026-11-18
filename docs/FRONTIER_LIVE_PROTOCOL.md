@@ -24,7 +24,7 @@ board seed**. It declares:
 {
   "type":"HELLO","matchId":"...","side":"A",
   "protocolVersion":"4.0",
-  "rulesVersion":"hexawars-frontier127-five-roles-v1",
+  "rulesVersion":"hexawars-frontier127-objectives-v2",
   "topology":"frontier127","boardCells":127,
   "roles":["scout","raider","interceptor","siege","captain"],
   "freeMoves":2,"freeAttacks":1
@@ -43,7 +43,7 @@ pass is:
 {
   "type":"PLAN","matchId":"...","turn":0,
   "protocolVersion":"4.0",
-  "rulesVersion":"hexawars-frontier127-five-roles-v1",
+  "rulesVersion":"hexawars-frontier127-objectives-v2",
   "plan":{"bid":0,"extras":[]}
 }
 ```
@@ -77,7 +77,8 @@ Current match seed remains private until the persisted terminal
 incompatible competitors earlier, before matchmaking, but must never
 weaken this per-plan refusal.
 
-The live gateway/runner now share the constructor and engine with
+The live gateway/runner now share the constructor, role combat and
+five-site objective/hold state with
 local human practice. The older seeded spectator simulation, legacy
 `HexaWars Agent Plan Contract v2` and generic endpoint probe still
 need separate compatibility classification/remediation under issue
