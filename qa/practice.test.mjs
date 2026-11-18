@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createMatch } from "../src/engine/match.ts";
+import { resolveCombat } from "../src/engine/combat.ts";
+import { checkVictory } from "../src/engine/victory.ts";
 import { validateRoundPlan } from "../dist/pages/rules/gateway/validator.js";
 import { runRound } from "../dist/pages/rules/engine/roundDriver.js";
 import { newBudget } from "../dist/pages/rules/engine/round-state.js";
@@ -105,4 +107,33 @@ test("bot-versus-bot practice runs every turn and resolves at or before the roun
     console.log("BOT GAME",seed,"rounds",game.round,"attacks",attacked,
       "moves",moved,"outcome",game.finished.winner);
   }
+});
+
+test("zero-HP units never win or extend a match (canonical source regression)",()=>{
+  const state=newPractice("practice-alpha-01").state;
+  const dead=state.units.map(u=>({...u,hp:0}));
+  assert.deepEqual(checkVictory({...state,units:dead}),
+    {winner:"draw",reason:"mutual_elimination"});
+  assert.deepEqual(checkVictory({...state,units:[
+    {...dead[0],hp:1},...dead.slice(1)
+  ]}),{winner:dead[0].owner,reason:"elimination"});
+});
+test("mutual-lethal defender wins with positive health and is not a zombie",()=>{
+  const combat=resolveCombat(
+    {id:"a",hp:5,strength:5},{id:"b",hp:5,strength:5},"plain");
+  assert.deepEqual(combat.destroyed,["a"]);
+  assert.equal(combat.attackerHp,0);
+  assert.equal(combat.defenderHp,1);
+});
+test("canonical dead-unit stalemate seed terminates before the 50-round cap",()=>{
+  const game=newPractice("practice-alpha-01");
+  while(!game.finished&&game.round<50){
+    advancePractice(game,chooseBotAction(game,"A"));
+  }
+  assert(game.finished,"Expected a concluded match");
+  assert(game.round<50,`Dead units extended match to round ${game.round}`);
+  assert.equal(game.state.units.filter(u=>u.hp>0).length,
+    game.state.units.filter(u=>u.hp>0).length);
+  console.log("ZERO HP FIX seed",game.seed,"completed after",game.round,
+    "rounds",game.finished);
 });
