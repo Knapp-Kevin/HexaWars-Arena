@@ -11,9 +11,10 @@
 import { initBoard, initHexDiskBoard, initFrontierBoard } from "./rules/engine/board.js";
 import { placeStartingUnits, placeFrontierUnits, getAllUnits } from "./rules/engine/units.js";
 import { newBudget, applyCarryover } from "./rules/engine/round-state.js";
-import { runRound } from "./rules/engine/roundDriver.js";
+import { runRound,runFrontierRound } from "./rules/engine/roundDriver.js";
 import { checkVictory } from "./rules/engine/victory.js";
 import { validateRoundPlan } from "./rules/gateway/validator.js";
+import { validateFrontierRoundPlan } from "./rules/gateway/frontier-round-validator.js";
 import { projectSeatObservation } from "./rules/gateway/observation.js";
 import { MOVE_POINTS, RANGE, ROUND_CAP } from "./rules/engine/constants.js";
 import { distance } from "./rules/engine/coords.js";
@@ -39,7 +40,7 @@ export const PRACTICE_TOPOLOGIES=Object.freeze({
   balanced61:"hexawars-balanced61-v1",
   frontier127:"hexawars-frontier127-v1",
 });
-export function newPractice(seed="practice-alpha-01",topology="legacy81",opponentPolicy="legacy-v1"){
+export function newPractice(seed="practice-alpha-01",topology="legacy81",opponentPolicy="legacy-v1",economy="classic-v1"){
   if(typeof seed!=="string" || !/^[a-zA-Z0-9_-]{1,48}$/.test(seed)){
     throw new Error("Seed must be 1–48 letters, digits, underscores or dashes");
   }
@@ -49,6 +50,10 @@ export function newPractice(seed="practice-alpha-01",topology="legacy81",opponen
   if(!["legacy-v1","bid-aware-v1"].includes(opponentPolicy) ||
     (opponentPolicy==="bid-aware-v1"&&topology!=="frontier127")){
     throw new Error("Unsupported opponent policy for this battlefield");
+  }
+  if(!["classic-v1","maneuver-v2"].includes(economy) ||
+    (economy==="maneuver-v2" && topology!=="frontier127")){
+    throw new Error("Unsupported economy for this battlefield");
   }
   const encodedSeed=numericSeed(seed);
   const board=topology==="frontier127"
@@ -62,7 +67,9 @@ export function newPractice(seed="practice-alpha-01",topology="legacy81",opponen
   return {
     // Preserve exact legacy match IDs so seeded historical practice traces
     // remain replayable under their original rules, without reinterpretation.
-    matchId:opponentPolicy==="bid-aware-v1"
+    matchId:economy==="maneuver-v2"
+      ?`practice:${PRACTICE_TOPOLOGIES[topology]}:maneuver-v2:${opponentPolicy}:${seed}`
+      :opponentPolicy==="bid-aware-v1"
       ?`practice:${PRACTICE_TOPOLOGIES[topology]}:bot-bid-aware-v1:${seed}`
       :topology==="legacy81"
         ?`practice:${seed}`
@@ -70,7 +77,10 @@ export function newPractice(seed="practice-alpha-01",topology="legacy81",opponen
     ...(opponentPolicy==="bid-aware-v1"?{opponentPolicy}:{}),
     seed,
     topology,
-    rulesVersion:PRACTICE_TOPOLOGIES[topology],
+    rulesVersion:economy==="maneuver-v2"
+      ? "hexawars-frontier127-maneuver-v2"
+      : PRACTICE_TOPOLOGIES[topology],
+    ...(economy==="maneuver-v2"?{economy}:{}),
     round:0,
     state:{
       turn:0,visible,units:getAllUnits(board),score:{a:0,b:0},
@@ -106,6 +116,7 @@ export function practiceView(game,side="A"){
     mode:"unranked-local",seed:game.seed,round:game.round,
     topology:game.topology,rulesVersion:game.rulesVersion,
     ...(game.opponentPolicy?{opponentPolicy:game.opponentPolicy}:{}),
+    ...(game.economy?{economy:game.economy,maxMoves:2}:{}),
     roundCap:game.state.roundCap,
     availableAp:applyCarryover(side==="A"?game.budgetA:game.budgetB).apPool,
     board:game.state.visible.map(c=>({
@@ -258,21 +269,23 @@ export function chooseBotAction(game,side="B"){
  * but the playable UI now submits two independent free round slots.
  */
 function normalizeOrders(input){
-  if(!input||input.kind==="pass")return {move:null,attack:null,bid:0};
+  if(!input||input.kind==="pass")return {move:null,move2:null,attack:null,bid:0};
   if(input.kind){
     if(!["move","attack"].includes(input.kind))
       throw new Error("Select a unit and a move or attack");
-    return {move:input.kind==="move"?input:null,
+    return {move:input.kind==="move"?input:null,move2:null,
       attack:input.kind==="attack"?input:null,bid:0};
   }
   if(typeof input!=="object"||Array.isArray(input))
     throw new Error("Invalid round order");
-  return {move:input.move??null,attack:input.attack??null,bid:input.bid??0};
+  return {move:input.move??null,move2:input.move2??null,
+    attack:input.attack??null,bid:input.bid??0};
 }
 function describeOrders(input){
   const orders=normalizeOrders(input);
   const kinds=[];
   if(orders.move)kinds.push("move");
+  if(orders.move2)kinds.push("move2");
   if(orders.attack)kinds.push("attack");
   return kinds.join("+")||"pass";
 }
@@ -281,8 +294,14 @@ function checkedPlan(game,side,input){
   const budget=applyCarryover(side==="A"?game.budgetA:game.budgetB);
   if(!Number.isSafeInteger(orders.bid)||orders.bid<0||orders.bid>budget.apPool)
     throw new Error("Initiative bid exceeds available AP");
+  if(orders.move2 && game.economy!=="maneuver-v2")
+    throw new Error("Second move requires maneuver-v2");
   const plan={bid:orders.bid,extras:[]};
-  for(const [kind,choice] of [["move",orders.move],["attack",orders.attack]]){
+  for(const [slot,kind,choice] of [
+    ["move","move",orders.move],
+    ["move2","move",orders.move2],
+    ["attack","attack",orders.attack],
+  ]){
     if(!choice)continue;
     if(choice.kind!==kind||typeof choice.unitId!=="string")
       throw new Error("Invalid "+kind+" slot");
@@ -292,14 +311,18 @@ function checkedPlan(game,side,input){
       throw new Error("Invalid hex coordinates");
     const unit=ownUnits(game,side).find(u=>u.id===choice.unitId);
     if(!unit)throw new Error("Not one of your units");
-    const valid=legalCommands(game,side,unit.id,orders.move).find(x=>
+    const staged=orders.move2?.unitId===unit.id?orders.move2:orders.move;
+    const valid=legalCommands(game,side,unit.id,staged).find(x=>
       x.kind===kind&&exactlySame(x.to,to));
     if(!valid)throw new Error("That "+kind+" is not legal this round");
     const fragment=planForAction(unit,valid);
-    if(kind==="move")plan.freeMove=fragment.freeMove;
+    if(slot==="move")plan.freeMove=fragment.freeMove;
+    else if(slot==="move2")plan.secondMove=fragment.freeMove;
     else plan.freeAction=fragment.freeAction;
   }
-  const result=validateRoundPlan(plan,side,game.state,budget);
+  const result=game.economy==="maneuver-v2"
+    ?validateFrontierRoundPlan(plan,side,game.state,budget)
+    :validateRoundPlan(plan,side,game.state,budget);
   if(!result.ok)throw new Error("Plan rejected: "+result.reason);
   return plan;
 }
@@ -385,7 +408,8 @@ export function advancePractice(game,action){
   const planB=checkedPlan(game,"B",botOrders);
   const startingPositions=new Map(game.state.units.map(u=>
     [u.id,clonePos(u.position)]));
-  const result=runRound({
+  const resolve=game.economy==="maneuver-v2"?runFrontierRound:runRound;
+  const result=resolve({
     matchId:game.matchId,round:game.round,state:game.state,
     planA,planB,budgetA:game.budgetA,budgetB:game.budgetB,
   });
@@ -395,7 +419,12 @@ export function advancePractice(game,action){
   game.round+=1;
   // Record the acting side's own move only. Failed moves also become
   // evidence against repeatedly choosing the same blocked destination.
-  for(const [side,command] of [["A",playerOrders.move],["B",botOrders.move]]){
+  for(const [side,command] of [
+    ["A",playerOrders.move],["B",botOrders.move],
+    ...(game.economy==="maneuver-v2"
+      ? [["A",playerOrders.move2],["B",botOrders.move2]]
+      : []),
+  ]){
     if(command?.kind!=="move")continue;
     const from=startingPositions.get(command.unitId);
     if(!from)continue;
@@ -413,6 +442,10 @@ export function advancePractice(game,action){
     bot:describeOrders(botOrders),events,
     playerMove:playerOrders.move?structuredClone(playerOrders.move):null,
     botMove:botOrders.move?structuredClone(botOrders.move):null,
+    ...(game.economy==="maneuver-v2"?{
+      playerMove2:playerOrders.move2?structuredClone(playerOrders.move2):null,
+      botMove2:botOrders.move2?structuredClone(botOrders.move2):null,
+    }:{}),
     playerAttack:playerOrders.attack?structuredClone(playerOrders.attack):null,
     botAttack:botOrders.attack?structuredClone(botOrders.attack):null,
     bidA:planA.bid,bidB:planB.bid});
