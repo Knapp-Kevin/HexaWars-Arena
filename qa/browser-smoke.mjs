@@ -337,18 +337,26 @@ async function verifyPlayablePractice(mobile=false){
     let chosen=null;
     for(let index=0;index<await alternate.count();index++){
       const button=alternate.nth(index);
-      if((await button.getAttribute("data-unit-id"))!==firstUnit){
-        chosen=button;break;
-      }
+      const id=await button.getAttribute("data-unit-id");
+      if(id===firstUnit)continue;
+      await button.click();
+      await page.waitForFunction(id=>
+        [...document.querySelectorAll("#squad-roster button")].some(b=>
+          b.dataset.unitId===id&&b.getAttribute("aria-pressed")==="true"),
+        id,{timeout:15000});
+      // A particular class might be hemmed in by seeded terrain. Try
+      // another class rather than pretending every unit always has a move.
+      if(await page.locator("#battle-map .cell.available").count()===0)continue;
+      const destination=page.locator("#battle-map .cell.available").first();
+      await destination.click();
+      await page.waitForFunction(()=>
+        !document.querySelector("#clear-move2")?.disabled,
+        undefined,{timeout:15000});
+      chosen=id;
+      break;
     }
-    assert(chosen,"Need a distinct second squad for 5v5 free movement");
-    await chosen.click();
-    await page.waitForFunction(()=>
-      document.querySelectorAll("#battle-map .cell.available").length>0,
-      undefined,{timeout:15000});
-    await page.locator("#battle-map .cell.available").first().click();
-    await page.waitForFunction(()=>!document.querySelector("#clear-move2")?.disabled,
-      undefined,{timeout:15000});
+    assert(chosen,
+      "At least one different squad must have a fully valid second move");
     assert(await page.locator("#move-two-slot").isVisible());
     assert.notEqual((await page.locator("#planned-move").innerText()).trim(),"Not set",
       "Queuing a second squad must not replace or lose Move 1");
