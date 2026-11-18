@@ -100,6 +100,35 @@ export async function createPractice3D(canvas,overlay,{onHex,onUnavailable}){
         if(cell)markerTarget(cell,action.kind);
       }
     }
+    // On narrow touch screens, perspective compression makes several adjacent
+    // projected hex buttons overlap. Keep the board readable and provide a
+    // proper horizontal command ribbon with full-size, accessible tap targets.
+    const tray=document.createElement("div");
+    tray.className="three-d-tray";
+    tray.setAttribute("role","group");
+    tray.setAttribute("aria-label","Squad selection and legal orders");
+    for(const {cell,kind} of state.markers){
+      const b=document.createElement("button");
+      b.type="button";
+      b.className="three-d-tray-choice "+kind+
+        (state.queued?.to?.q===cell.q&&state.queued?.to?.r===cell.r?" queued":"");
+      b.dataset.kind=kind;
+      b.dataset.q=String(cell.q);
+      b.dataset.r=String(cell.r);
+      const unit=state.view.units.find(u=>u.q===cell.q&&u.r===cell.r);
+      b.textContent=kind==="select"
+        ?(unit?.type??"Squad").toUpperCase()
+        :(kind==="attack"?"Attack ":"Move ")+cell.q+","+cell.r;
+      b.setAttribute("aria-label",kind==="select"
+        ?`Select Blue ${unit?.type??"squad"}`
+        :`${kind==="attack"?"Attack":"Move to"} hex ${cell.q},${cell.r}`);
+      b.addEventListener("click",event=>{
+        event.stopPropagation();
+        onHex(cell.q,cell.r);
+      });
+      tray.append(b);
+    }
+    overlay.append(tray);
   }
   function update(view,selection={}){
     const prev=state.view;
