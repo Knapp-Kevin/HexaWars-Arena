@@ -16,7 +16,7 @@ import { checkVictory } from "./rules/engine/victory.js";
 import { validateRoundPlan } from "./rules/gateway/validator.js";
 import { validateFrontierRoundPlan } from "./rules/gateway/frontier-round-validator.js";
 import { projectSeatObservation } from "./rules/gateway/observation.js";
-import { MOVE_POINTS, RANGE, ROUND_CAP } from "./rules/engine/constants.js";
+import { MOVE_POINTS, FRONTIER_ROLE_MOVE_POINTS, RANGE, ROUND_CAP } from "./rules/engine/constants.js";
 import { FRONTIER_ROLE_SPECIALS } from "./rules/engine/frontier-role-combat.js";
 import { distance } from "./rules/engine/coords.js";
 
@@ -111,6 +111,10 @@ export function newPractice(seed="practice-alpha-01",topology="legacy81",opponen
   };
 }
 
+function isFiveRoleGame(game){return game.economy==="frontier-five-roles-v1";}
+function unitMoveRange(game,unit){
+  return (isFiveRoleGame(game)?FRONTIER_ROLE_MOVE_POINTS:MOVE_POINTS)[unit.type]??1;
+}
 function ownUnits(game,side){
   return game.state.units.filter(u=>u.owner===side&&u.hp>0);
 }
@@ -144,7 +148,7 @@ export function practiceView(game,side="A"){
     units:[...own,...opponents].map(u=>({
       id:u.id,side:u.owner,q:u.position.q,r:u.position.r,
       hp:u.hp,strength:u.strength,type:u.type,
-      moveRange:MOVE_POINTS[u.type],attackRange:RANGE[u.type],
+      moveRange:unitMoveRange(game,u),attackRange:RANGE[u.type],
       ...(game.economy==="frontier-five-roles-v1"
         ?{special:FRONTIER_ROLE_SPECIALS[u.type]??""}:{}),
     })),
@@ -185,17 +189,18 @@ export function legalCommands(game,side,unitId,stagedMove=null){
       !Number.isSafeInteger(stagedMove.to.r)||!Number.isSafeInteger(stagedMove.to.s)||
       stagedMove.to.q+stagedMove.to.r+stagedMove.to.s!==0)return [];
     const trial=planForAction(unit,stagedMove);
-    if(!validateRoundPlan(trial,side,game.state,budget).ok)return [];
+    if(!validateRoundPlan(trial,side,game.state,budget,
+      isFiveRoleGame(game)).ok)return [];
     stagedOrigin=stagedMove.to;
     stagedFragment=trial.freeMove;
   }
   for(const cell of game.state.visible){
     const to=cell.position;
     if((cell.terrain!=="mountain"&&cell.terrain!=="water") &&
-      !occupied.has(key(to)) && distance(unit.position,to)===(MOVE_POINTS[unit.type]??1)){
+      !occupied.has(key(to)) && distance(unit.position,to)===unitMoveRange(game,unit)){
       const cmd={kind:"move",unitId,to:clonePos(to)};
       if(validateRoundPlan(planForAction(unit,cmd),side,game.state,
-        side==="A"?game.budgetA:game.budgetB).ok)options.push(cmd);
+        side==="A"?game.budgetA:game.budgetB,isFiveRoleGame(game)).ok)options.push(cmd);
     }
   }
   for(const enemy of knownEnemyUnits(game,side)){
@@ -205,7 +210,8 @@ export function legalCommands(game,side,unitId,stagedMove=null){
       const cmd={kind:"attack",unitId,to:clonePos(enemy.position)};
       const trial=planForAction(unit,cmd);
       if(stagedFragment)trial.freeMove=stagedFragment;
-      if(validateRoundPlan(trial,side,game.state,budget).ok)options.push(cmd);
+      if(validateRoundPlan(trial,side,game.state,budget,
+        isFiveRoleGame(game)).ok)options.push(cmd);
     }
   }
   return options;
