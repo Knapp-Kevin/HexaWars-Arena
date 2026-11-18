@@ -88,7 +88,7 @@ describe("real Frontier match runner executes identical 5v5 two-wave plans as br
       expect((first.visible as unknown[]).length).toBeLessThan(127);
       expect(first.protocolVersion).toBe(LIVE_PROTOCOL_VERSION);
       expect(first.rulesVersion).toBe(ACTIVE_FRONTIER_RULES_VERSION);
-      expect((first.frontierObjectiveHold as {a:number;b:number})).toEqual({a:0,b:0});
+      expect((first.objectiveHold as {a:number;b:number})).toEqual({a:0,b:0});
       expect(JSON.stringify(frames)).not.toContain(seed);
       expect(JSON.stringify(frames)).not.toContain("frontierRaiderStrikes");
     }
@@ -107,7 +107,7 @@ describe("real Frontier match runner executes identical 5v5 two-wave plans as br
   test("malicious duplicate unit in second wave causes canonical invalid-plan loss, never executes",async()=>{
     const auth=dbAndIdentities();dbs.push(auth.db);
     const seed="frontier-live-forged-wave",matchId="live-frontier-invalid";
-    const planA=legalTwoMoves(createFrontierRoleMatch(seed));
+    const planA=legalTwoMoves(createFrontierObjectiveMatch(seed));
     const aFrames:Record<string,unknown>[]=[];
     const a=responder(matchId,"A",planA,aFrames,true);
     const b=responder(matchId,"B",pass,[]);
