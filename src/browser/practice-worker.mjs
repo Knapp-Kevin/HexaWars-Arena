@@ -1,11 +1,11 @@
 import {newPractice,practiceView,legalCommands,advancePractice,validatePracticeOrders} from "./practice-core.mjs";
 let session=null;
 self.onmessage=(message)=>{
-  const {id,type,seed,topology,unitId,action,orders}=message.data??{};
+  const {id,type,seed,topology,opponentPolicy,unitId,action,orders}=message.data??{};
   if(!Number.isSafeInteger(id))return;
   try{
     if(type==="START"){
-      session=newPractice(seed,topology??"frontier127");
+      session=newPractice(seed,topology??"frontier127",opponentPolicy??"legacy-v1");
       self.postMessage({id,ok:true,state:practiceView(session)});
       return;
     }
