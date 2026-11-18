@@ -200,13 +200,17 @@ function render(){
 async function startBattle(){
   updateBusy(true);status("Deploying squads…");
   try{
-    const reply=await request("START",{seed:"local-"+crypto.randomUUID().slice(0,12)});
+    const topology=document.querySelector('input[name="arena-topology"]:checked')?.value??"balanced61";
+    const reply=await request("START",{
+      seed:"local-"+crypto.randomUUID().slice(0,12),topology,
+    });
     current=reply.state;selectedId=null;queued=null;options=[];
     el.ready.hidden=true;el.victory.hidden=true;
     el.selected.textContent="Choose a blue unit";
     el.command.textContent="Select a squad";
     el.instruction.textContent="Choose a unit, then a white movement or red attack hex.";
-    el.event.textContent="You command Blue. Red is a local AI opponent.";
+    el.event.textContent=(current.topology==="balanced61"?"Balanced Hex":"Classic Arena")+
+      " · Blue command vs Red AI · Unranked practice.";
     status("Your move. Select a blue squad.");
     render();
   }catch(e){status(String(e?.message||e));}
