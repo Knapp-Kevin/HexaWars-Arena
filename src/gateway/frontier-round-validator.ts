@@ -70,7 +70,7 @@ export function validateFrontierRoundPlan(
     ...(plan.freeMove?{freeMove:plan.freeMove}:{}),
     ...(!attackFromSecond&&plan.freeAction?{freeAction:plan.freeAction}:{}),
   };
-  const first=validateRoundPlan(firstPlan,side,state,budget);
+  const first=validateRoundPlan(firstPlan,side,state,budget,fiveRoles);
   if (!first.ok) return first;
   if (second) {
     const secondPlan: RoundPlan={
@@ -79,7 +79,7 @@ export function validateFrontierRoundPlan(
       freeMove:second,
       ...(attackFromSecond&&plan.freeAction?{freeAction:plan.freeAction}:{}),
     };
-    const result=validateRoundPlan(secondPlan,side,state,budget);
+    const result=validateRoundPlan(secondPlan,side,state,budget,fiveRoles);
     if (!result.ok) return result;
   }
   return {ok:true};
