@@ -168,6 +168,11 @@
       .victory-card h2{font-size:32px}
       .is-3d .statusline{display:none}
     }
+    /* Finish screen is an outcome, not a disabled order form. */
+    .match-finished main{grid-template-columns:minmax(0,1fr)}
+    .match-finished aside{display:none!important}
+    .match-finished .statusline{display:none}
+    .match-finished.is-3d{padding-bottom:0}
   </style>
   <script type="module" src="./practice.js"></script>
 </head>
