@@ -88,6 +88,7 @@ const ruleSources = [
   "engine/victory.ts", "engine/fog.ts",
   "engine/round-resolver/extras.ts", "engine/round-resolver/triggers.ts",
   "gateway/observation.ts", "gateway/validator.ts",
+  "gateway/frontier-round-validator.ts",
   "gateway/validator/ownership.ts", "gateway/validator/ap-arithmetic.ts",
   "gateway/validator/move-path.ts", "gateway/validator/attack-range.ts",
   "gateway/validator/extras-uniqueness.ts",
