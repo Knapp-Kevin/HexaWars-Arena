@@ -13,7 +13,7 @@ import {validateFrontierRoundPlan} from "../../src/gateway/frontier-round-valida
 import {validateMovePath} from "../../src/gateway/validator/move-path.ts";
 import {FRONTIER_ROLE_MOVE_POINTS} from "../../src/engine/constants.ts";
 import {projectSeatObservation} from "../../src/gateway/observation.ts";
-import type {CubeCoord,MatchState,Unit,FrontierRoundPlan} from "../../src/shared/types.ts";
+import type {CubeCoord,HexCell,MatchState,Unit,FrontierRoundPlan} from "../../src/shared/types.ts";
 
 const key=(pos:CubeCoord)=>pos.q+","+pos.r+","+pos.s;
 const same=(a:CubeCoord,b:CubeCoord)=>key(a)===key(b);
@@ -129,7 +129,7 @@ describe("single Frontier five-site strategic control",()=>{
       return index>=0&&index<4?{...u,position:ring[index]}:u;
     })};
     const claimed=updateFrontierObjectives(positioned);
-    const center=c=>c.position.q===0&&c.position.r===0;
+    const center=(c:HexCell)=>c.position.q===0&&c.position.r===0;
     expect(claimed.state.visible.find(center)?.controlledBy).toBe("A");
     expect(claimed.events.some(e=>e.type==="territory_claimed"&&
       (e.payload.position as CubeCoord).q===0&&e.payload.owner==="A")).toBe(true);
