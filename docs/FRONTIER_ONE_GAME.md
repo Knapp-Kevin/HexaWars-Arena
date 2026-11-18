@@ -8,6 +8,9 @@
 - Commands: 2 different friendly squads may move, 1 may attack, both seats
   submit sealed plans; 3 starting initiative AP, carry at most one, max four.
 - Fog: corrected cube-symmetric line of sight with terrain obstructions.
+- Current Frontier objective: own 3/5 fixed symmetric sites for 3
+  consecutive completed rounds; control persists until reclaimed.
+  See [FRONTIER_OBJECTIVES.md](FRONTIER_OBJECTIVES.md).
 - One primary action: **Start battle**, and on completion **Play again**.
   No map, rule-version, or economy radio buttons are exposed to players.
 - Current local opponent: bid-aware AI on Red. This is **unranked practice**,
