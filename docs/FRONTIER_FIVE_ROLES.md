@@ -81,7 +81,8 @@ enemy data), native source and built browser rules parity, and
 desktop/mobile 2D/3D human round tasks. AI-vs-AI seeded cohorts are
 diagnostic only.
 
-**Still open:** functioning territory objective progression, AP-priced
+**Next lane (superseded by [FRONTIER_OBJECTIVES.md](FRONTIER_OBJECTIVES.md)):**
+AP-priced
 extras and guards, more diverse bot policy challenges, high-sample
 paired seat swaps, and actual human PvP transport. Do not infer game
 balance from green CI or confuse five role models with finished PvP.
