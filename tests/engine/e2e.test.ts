@@ -290,7 +290,7 @@ describe('e2e — Plan D v2 Phase 7 Round Economy (9 rounds)', () => {
     expect(eventTypes).toContain('reserve_fired');
     // wasted_action: fires when reserve kills a unit whose plan still references it (r2)
     expect(eventTypes).toContain('wasted_action');
-    expect(eventTypes).toContain('unit_attacked'); // covers the G1 code path
+    expect(eventTypes).toContain('action_wasted'); // no target in live range; rushed-shot positive case is tested separately
 
     // Final round count
     expect(rt.round).toBe(9);
