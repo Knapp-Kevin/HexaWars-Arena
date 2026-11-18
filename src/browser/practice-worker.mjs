@@ -1,11 +1,11 @@
 import {newPractice,practiceView,legalCommands,advancePractice} from "./practice-core.mjs";
 let session=null;
 self.onmessage=(message)=>{
-  const {id,type,seed,unitId,action}=message.data??{};
+  const {id,type,seed,topology,unitId,action}=message.data??{};
   if(!Number.isSafeInteger(id))return;
   try{
     if(type==="START"){
-      session=newPractice(seed);
+      session=newPractice(seed,topology??"balanced61");
       self.postMessage({id,ok:true,state:practiceView(session)});
       return;
     }
