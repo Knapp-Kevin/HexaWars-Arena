@@ -24,6 +24,13 @@ export function validateFrontierRoundPlan(
   if (!plan || typeof plan !== "object" || !Array.isArray(plan.extras)) {
     return {ok:false,reason:"frontier_plan_malformed"};
   }
+  // The v2 preview exposes exactly one executable free ATTACK. A typed
+  // ability is legal in the frozen Plan D schema but the shared round
+  // driver does not resolve it yet. Reject rather than silently consuming
+  // a human/agent's action to no effect.
+  if (plan.freeAction && plan.freeAction.type!=="attack") {
+    return {ok:false,reason:"frontier_ability_not_implemented"};
+  }
   if ("secondMove" in plan && !plan.secondMove) {
     return {ok:false,reason:"frontier_second_move_malformed"};
   }
