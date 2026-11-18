@@ -75,6 +75,14 @@ export async function createPractice3D(canvas,overlay,{onHex,onUnavailable}){
     state.target=[...state.bounds.center];
     setZoom(state.home);
   }
+  function focusHex(q,r){
+    if(!state.bounds||!state.view)return;
+    const cell=state.view.board.find(c=>c.q===q&&c.r===r);
+    if(!cell)return;
+    const [x,z]=axialToWorld(cell),lim=state.bounds.halfExtent*.8;
+    state.target[0]=clamp(x,state.bounds.center[0]-lim,state.bounds.center[0]+lim);
+    state.target[2]=clamp(z,state.bounds.center[2]-lim,state.bounds.center[2]+lim);
+  }
   function markerTarget(cell,kind){
     const button=document.createElement("button");
     button.type="button";
@@ -220,9 +228,12 @@ export async function createPractice3D(canvas,overlay,{onHex,onUnavailable}){
     if(!state.view||!state.mvp)return;
     const rect=canvas.getBoundingClientRect();
     const atX=clientX-rect.left,atY=clientY-rect.top;
+    // Allow switching friendly squads directly on the 3D board, even when
+    // another squad is selected. Legal target highlights remain canonical.
+    const own=state.view.units.filter(u=>u.side==="A");
     const candidates=state.selectedId
-      ?state.options.map(a=>a.to)
-      :state.view.units.filter(u=>u.side==="A");
+      ?[...state.options.map(a=>a.to),...own]
+      :own;
     let best=null,proximity=Infinity;
     for(const c of candidates){
       const cell=state.view.board.find(x=>x.q===c.q&&x.r===c.r);
@@ -293,7 +304,7 @@ export async function createPractice3D(canvas,overlay,{onHex,onUnavailable}){
     if(event.key==="ArrowLeft"){event.preventDefault();state.yaw-=.11;}
     if(event.key==="ArrowRight"){event.preventDefault();state.yaw+=.11;}
   });
-  return {backend:renderer.backend,activate,deactivate,update,
+  return {backend:renderer.backend,activate,deactivate,update,focusHex,
     zoomIn:()=>setZoom(state.distance/1.25),
     zoomOut:()=>setZoom(state.distance*1.25),reset};
 }
