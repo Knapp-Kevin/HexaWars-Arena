@@ -95,14 +95,13 @@ describe("single Frontier five-site strategic control",()=>{
   it("owner persists when unit moves away; opponent capture flips and resets hold",()=>{
     const state=placeOnObjectives("persistent-control");
     const first=updateFrontierObjectives(state).state;
-    const a=first.units.filter(u=>u.owner==="A");
-    const vacated={...first,units:first.units.map(u=>
-      a.some(v=>v.id===u.id)
-        ?{...u,position:state.units.find(v=>v.id===u.id)!.position}
-        :u)};
-    // A real abandoned objective should NOT spontaneously revert to neutral.
-    const after=updateFrontierObjectives({...vacated,
-      units:vacated.units.map(u=>u.owner==="A"?{...u,position:{q:5,r:0,s:-5}}:u)}).state;
+    const home=createFrontierObjectiveMatch("persistent-control");
+    // Redeploy each A squad to its own genuine legal starting location, no
+    // doubled positions or unit-occupancy inventions in the test fixture.
+    const vacated={...first,units:first.units.map(u=>u.owner==="A"
+      ?{...u,position:{...home.units.find(x=>x.id===u.id)!.position}}:u)};
+    // An abandoned objective should NOT spontaneously revert to neutral.
+    const after=updateFrontierObjectives(vacated).state;
     expect(after.score.a).toBe(3);
     const old=first.visible.find(c=>same(c.position,FRONTIER_OBJECTIVES[0]))!;
     const defender=after.units.find(u=>u.owner==="B")!;
