@@ -1,6 +1,8 @@
 import type { Database } from "bun:sqlite";
 import type { MatchRecord, MatchState, AgentRoundBudget, RoundPlan } from "../shared/types.ts";
-import { createFrontierRoleMatch } from "../engine/frontier-match.ts";
+import {
+  createFrontierRoleMatch,ACTIVE_FRONTIER_RULES_VERSION,ACTIVE_FRONTIER_TOPOLOGY,
+} from "../engine/frontier-match.ts";
 import { runFrontierRoleRound } from "../engine/roundDriver.ts";
 import { newBudget, PASS_PLAN, applyCarryover } from "../engine/round-state.ts";
 import { ROUND_CAP } from "../engine/constants.ts";
@@ -94,7 +96,8 @@ function sendRoundFrame(
   state: MatchState,
   budget: AgentRoundBudget,
 ): void {
-  channel.send({ state, budget });
+  channel.send({state,budget,rulesVersion:ACTIVE_FRONTIER_RULES_VERSION,
+    topology:ACTIVE_FRONTIER_TOPOLOGY,maxMoveSlots:2,maxFreeAttacks:1});
 }
 
 export class MatchRunner {
