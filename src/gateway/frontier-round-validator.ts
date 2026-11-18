@@ -37,7 +37,7 @@ export function validateFrontierRoundPlan(
   }
   if(fiveRoles && plan.freeAction?.type==="attack"){
     const attacker=state.units.find(u=>u.id===plan.freeAction!.unitId);
-    if(attacker?.type==="siege" && (
+    if(attacker?.owner===side && attacker.hp>0 && attacker.type==="siege" && (
       plan.freeMove?.unitId===attacker.id ||
       plan.secondMove?.unitId===attacker.id
     )){
