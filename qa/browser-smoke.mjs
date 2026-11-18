@@ -250,12 +250,12 @@ async function verifyPlayablePractice(mobile=false){
     document.querySelectorAll("#battle-map .cell").length===127&&
     document.querySelector("#round-label")?.textContent?.includes("ROUND 1"),
     undefined,{timeout:30000});
-  assert.equal((await page.locator('input[value="frontier127"]').isChecked()),true,
-    "The human default should be the larger Frontier board");
-  assert((await page.locator("#event-label").innerText()).includes("Clear sight"),
-    "The new visible gameplay rules must disclose the corrected line-of-sight variant");
-  assert.equal(await page.locator('input[name="command-economy"][value="maneuver-v3-vision"]').isChecked(),
-    true,"Default Frontier should explicitly offer corrected tactical sight without rewriting archived rules");
+  assert.equal(await page.locator('input[name="arena-topology"]').count(),0,
+    "Human practice must not expose multiple battlefields");
+  assert.equal(await page.locator('input[name="command-economy"]').count(),0,
+    "Human practice must not expose multiple competing rulesets");
+  assert((await page.locator("#event-label").innerText()).includes("Frontier"),
+    "Human battle identity must be Frontier");
   assert(await page.locator("#move-two-slot").isVisible(),
     "The human must see two move slots, not just a v2 label");
   const symmetry=await page.locator("#battle-map .cell").evaluateAll(nodes=>{
@@ -479,28 +479,27 @@ async function verifyInteractiveVerdantPractice(mobile=false){
   console.log(`PASS Playable Verdant ${mobile?"mobile":"desktop"}: Frontier127, five squads and canonical orders`);
 }
 
-async function verifyOriginalLegacyArena(){
-  const page=await newPage("legacy81");
+async function verifyOneFrontierBattle(){
+  const page=await newPage("single-frontier");
   const response=await page.goto(new URL("./practice.html",base).href,
     {waitUntil:"domcontentloaded",timeout:30000});
-  assert(response?.ok(),"Original arena page failed");
-  await page.locator('input[name="arena-topology"][value="legacy81"]').check();
+  assert(response?.ok(),"Frontier page failed");
+  assert.equal(await page.locator('input[name="arena-topology"]').count(),0);
+  assert.equal(await page.locator('input[name="command-economy"]').count(),0);
+  assert.equal(await page.locator("#change-arena").count(),0,
+    "Finished game must not offer another battlefield");
   await page.locator("#start-battle").click();
   await page.waitForFunction(()=>
-    document.querySelectorAll("#battle-map .cell").length===81&&
+    document.querySelectorAll("#battle-map .cell").length===127 &&
     document.querySelector("#ready-screen")?.hidden===true,
     undefined,{timeout:30000});
-  assert((await page.locator("#event-label").innerText()).includes("Classic Arena"),
-    "Historical map is not explicitly labeled");
-  assert(await page.locator("#move-two-slot").isHidden(),
-    "Legacy 81-cell match must retain frozen one-move rules despite v2 menu default");
-  await page.locator("#skip-round").click();
-  await page.waitForFunction(()=>
-    document.querySelector("#round-label")?.textContent?.includes("ROUND 2"),
-    undefined,{timeout:30000});
-  assertHealthy("legacy81");
+  assert.equal((await page.locator("#score-blue").innerText()).trim(),"5");
+  assert.equal((await page.locator("#score-red").innerText()).trim(),"5");
+  assert(await page.locator("#move-two-slot").isVisible(),
+    "Every new match must use the same two-move round economy");
+  assertHealthy("single-frontier");
   await page.close();
-  console.log("PASS Historic 81-cell arena remains selectable and playable");
+  console.log("PASS One Frontier battlefield and command economy, no legacy options");
 }
 
 async function verifyFinishedMatchAndRematch(mobile=false){
@@ -570,25 +569,23 @@ async function verifyFinishedMatchAndRematch(mobile=false){
   await page.screenshot({path:resolve(screenshots,
     mobile?"practice-complete-mobile.png":"practice-complete-desktop.png"),fullPage:true});
 
-  await page.locator("#change-arena").click();
-  assert(await page.locator("#ready-screen").isVisible(),"Cannot return to arena selection");
-  await page.locator('input[name="arena-topology"][value="legacy81"]').check();
-  await page.locator("#start-battle").click();
+  await page.locator("#new-battle").click();
   await page.waitForFunction(()=>
     document.querySelector("#ready-screen")?.hidden===true &&
-    document.querySelectorAll("#battle-map .cell").length===81,
+    document.querySelectorAll("#battle-map .cell").length===127 &&
+    document.querySelector("#round-label")?.textContent?.includes("ROUND 1"),
     undefined,{timeout:30000});
   if(mobile){
     await page.waitForFunction(()=>
-      document.querySelector("#game-3d")?.dataset.boardCells==="81",
+      document.querySelector("#game-3d")?.dataset.boardCells==="127",
       undefined,{timeout:30000});
     assert.equal(await page.locator("#game-3d").getAttribute("data-animation-state"),"idle",
-      "3D view fabricated a movement transition between different match seeds");
+      "3D view fabricated a movement transition between rematches");
   }
   assertHealthy(label);
   await page.close();
   console.log("PASS Completed "+(mobile?"mobile 3D":"desktop 2D")+
-    " game, human legal action, final outcome, rematch and versioned arena switch");
+    " game, human legal action, final outcome and Frontier rematch");
 }
 
 try {
@@ -597,7 +594,7 @@ try {
   await verifyMobileViewport();
   await verifyPlayablePractice(false);
   await verifyPlayablePractice(true);
-  await verifyOriginalLegacyArena();
+  await verifyOneFrontierBattle();
   await verifyInteractiveVerdantPractice(false);
   await verifyInteractiveVerdantPractice(true);
   await verifyFinishedMatchAndRematch(false);
