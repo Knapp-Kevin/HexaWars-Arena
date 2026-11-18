@@ -15,7 +15,7 @@ self.onmessage=(message)=>{
     if(type==="SELECT"){
       self.postMessage({id,ok:true,
         legal:legalCommands(session,"A",unitId,
-          orders?.move2?.unitId===unitId?orders.move2:orders?.move??null),
+          orders?.move2?.unitId===unitId?orders.move2:orders?.move??null,orders??null),
         state:practiceView(session)});
       return;
     }
