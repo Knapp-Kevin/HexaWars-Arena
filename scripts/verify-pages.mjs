@@ -27,7 +27,8 @@ for (const filename of files) {
 const required = [
   "index.html", "arena.html", "verdant.html", "practice.html", "practice.js",
   "practice-worker.mjs", "practice-core.mjs", "practice-3d.mjs", "rules/engine/roundDriver.js",
-  "rules/gateway/validator.js", "rules/gateway/frontier-round-validator.js",
+  "rules/gateway/validator.js", "rules/engine/fog-corrected.js",
+  "rules/gateway/frontier-round-validator.js",
   "rules/gateway/observation.js", "arena.js",
   "verdant.js", "scene-renderer.mjs", "battlefield-geometry.mjs", "replay-motion.mjs", "demo-replay.js", "public-match.js",
   ".nojekyll", "arena.css", "arena-core.css", "arena-shell.css",

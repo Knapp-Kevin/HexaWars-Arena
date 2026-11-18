@@ -1,5 +1,6 @@
 import type { CubeCoord, HexCell, MatchState, Unit } from "../shared/types.ts";
 import { visibleCells } from "../engine/fog.ts";
+import { visibleCellsSymmetric } from "../engine/fog-corrected.ts";
 
 function coordKey(pos: CubeCoord): string {
   return `${pos.q},${pos.r},${pos.s}`;
@@ -10,7 +11,11 @@ function coordKey(pos: CubeCoord): string {
  * Never clone/spread the raw MatchState: it contains both armies, the full
  * terrain map, and potentially unrevealed stance/reserve records.
  */
-export function projectSeatObservation(state: MatchState, side: "A" | "B"): MatchState {
+export function projectSeatObservation(
+  state: MatchState,
+  side: "A" | "B",
+  vision: "legacy-v1" | "cube-symmetric-v1" = "legacy-v1",
+): MatchState {
   const unitsByCoord = new Map<string, Unit>();
   for (const unit of state.units) {
     unitsByCoord.set(coordKey(unit.position), unit);
@@ -24,7 +29,8 @@ export function projectSeatObservation(state: MatchState, side: "A" | "B"): Matc
     controlledBy: cell.controlledBy,
     unit: unitsByCoord.get(coordKey(cell.position)),
   }));
-  const shown = new Set(visibleCells([board], side).map(coordKey));
+  const see=vision==="cube-symmetric-v1"?visibleCellsSymmetric:visibleCells;
+  const shown = new Set(see([board], side).map(coordKey));
   const friendly = state.units.filter((unit) => unit.owner === side);
 
   return {
