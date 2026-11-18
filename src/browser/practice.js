@@ -8,7 +8,9 @@ const el={
   round:$("round-label"),blue:$("score-blue"),red:$("score-red"),
   selected:$("selected-name"),command:$("command-label"),instruction:$("instruction"),
   notice:$("notice"),event:$("event-label"),commit:$("commit-round"),
-  plannedMove:$("planned-move"),plannedAttack:$("planned-attack"),
+  plannedMove:$("planned-move"),plannedMove2:$("planned-move2"),
+  moveTwoSlot:$("move-two-slot"),clearMove2:$("clear-move2"),
+  plannedAttack:$("planned-attack"),
   clearMove:$("clear-move"),clearAttack:$("clear-attack"),
   bidAmount:$("bid-amount"),bidBudget:$("bid-budget"),
   pass:$("skip-round"),victory:$("victory"),result:$("result"),
@@ -21,7 +23,7 @@ const SVG="http://www.w3.org/2000/svg",RADIUS=33,HEIGHT=Math.sqrt(3)*RADIUS;
 const colors={plain:"#4e7e58",forest:"#275541",mountain:"#71818d",water:"#246078"};
 const letters={scout:"S",infantry:"I",heavy:"H"};
 let sequence=0,current=null,selectedId=null,options=[],queued=null,busy=false;
-let orders={move:null,attack:null,bid:0};
+let orders={move:null,move2:null,attack:null,bid:0};
 let scene3D=null,using3D=false,threeDLoading=false,threeDFailed=false;
 let rosterSignature="";
 const requests=new Map();
@@ -259,6 +261,7 @@ function focusSquad(unit){
 
 function showOrders(){
   el.plannedMove.textContent=labelOrder(orders.move);
+  el.plannedMove2.textContent=labelOrder(orders.move2);
   el.plannedAttack.textContent=labelOrder(orders.attack);
   const available=current?.availableAp??3;
   el.bidBudget.textContent=orders.bid+" / "+available+" AP";
@@ -269,10 +272,11 @@ function showOrders(){
 }
 function updateBusy(value){
   busy=value;
-  el.commit.disabled=busy||(!orders.move&&!orders.attack&&orders.bid===0)||
+  el.commit.disabled=busy||(!orders.move&&!orders.move2&&!orders.attack&&orders.bid===0)||
     !current||!!current.ended;
   el.pass.disabled=busy||!current||!!current.ended;
   el.clearMove.disabled=busy||!orders.move||!!current?.ended;
+  el.clearMove2.disabled=busy||!orders.move2||!!current?.ended;
   el.clearAttack.disabled=busy||!orders.attack||!!current?.ended;
   el.bidAmount.disabled=busy||!current||!!current.ended;
   for(const button of el.roster.querySelectorAll("button"))button.disabled=busy||!!current?.ended;
@@ -391,30 +395,37 @@ function render(){
     el.command.textContent="Battle complete";
     status("Battle finished. Choose your next battle.");
   }
+  el.moveTwoSlot.hidden=current.economy!=="maneuver-v2";
   showOrders();updateBusy(busy);draw();sync3D();
 }
 async function startBattle(){
   updateBusy(true);status("Deploying squads…");
   try{
     const topology=document.querySelector('input[name="arena-topology"]:checked')?.value??"frontier127";
+    const requestedEconomy=document.querySelector(
+      'input[name="command-economy"]:checked')?.value??"maneuver-v2";
+    const economy=topology==="frontier127"?requestedEconomy:"classic-v1";
     const reply=await request("START",{
-      seed:"local-"+crypto.randomUUID().slice(0,12),topology,
+      seed:"local-"+crypto.randomUUID().slice(0,12),topology,economy,
       // Only the new opponent profile bids intelligently; historical
       // versioned local practice identities remain byte-identical.
       opponentPolicy:topology==="frontier127"?"bid-aware-v1":"legacy-v1",
     });
     current=reply.state;selectedId=null;queued=null;options=[];
     rosterSignature="";
-    orders={move:null,attack:null,bid:0};
+    orders={move:null,move2:null,attack:null,bid:0};
     el.bidAmount.value="0";
     el.ready.hidden=true;el.victory.hidden=true;
     el.threeDTools.hidden=false;
     el.selected.textContent="Choose a blue unit";
     el.command.textContent="Select a squad";
-    el.instruction.textContent="Queue one move and one attack. You can revise each before resolving.";
+    el.instruction.textContent=current.economy==="maneuver-v2"
+      ?"Two different Blue squads can move. Then queue one attack.":
+      "Queue one move and one attack. You can revise each before resolving.";
     const arenaName={frontier127:"Frontier · 127 hexes · five squads",
       balanced61:"Balanced Hex · 61 hexes",legacy81:"Classic Arena · 81 hexes"};
     el.event.textContent=(arenaName[current.topology]??"HexaWars")+
+      (current.economy==="maneuver-v2"?" · Maneuver: 2 moves + 1 attack":"")+
       (current.opponentPolicy==="bid-aware-v1"?" · Red AI contests initiative":" · Blue vs Red AI");
     status("Your move. Select a blue squad.");
     render();
@@ -447,7 +458,12 @@ function clickCell(cell,piece,choice){
     void (async()=>{
       const candidate={kind:choice.kind,unitId:selectedId,
         to:{q:cell.q,r:cell.r,s:-cell.q-cell.r}};
-      const revised={...orders,[choice.kind]:candidate};
+      const slot=choice.kind==="move"&&current.economy==="maneuver-v2"
+        ?orders.move?.unitId===selectedId?"move"
+          :orders.move2?.unitId===selectedId?"move2"
+          :orders.move?"move2":"move"
+        :choice.kind;
+      const revised={...orders,[slot]:candidate};
       updateBusy(true);
       try{
         await request("PREVIEW",{orders:revised});
@@ -479,11 +495,12 @@ async function advance(action){
   try{
     const reply=await request("ACTION",{action});
     current=reply.state;selectedId=null;options=[];queued=null;
-    orders={move:null,attack:null,bid:0};
+    orders={move:null,move2:null,attack:null,bid:0};
     el.bidAmount.value="0";
     el.selected.textContent="Choose a blue unit";
     el.command.textContent="Choose a squad";
-    const verbs={move:"advanced",attack:"attacked",
+    const verbs={move:"advanced",move2:"maneuvered",
+      "move+move2":"maneuvered twice",attack:"attacked",
       "move+attack":"advanced and attacked",pass:"held position"};
     const summary="Blue "+(verbs[reply.playerAction]??"acted")+
       " · Red "+(verbs[reply.botAction]??"acted")+
@@ -505,39 +522,46 @@ el.changeArena.addEventListener("click",()=>{
   el.start.focus();
 });
 el.commit.addEventListener("click",()=>{void advance({...orders});});
-el.clearMove.addEventListener("click",()=>{void (async()=>{
+async function clearMoveSlot(slot){
   if(busy||!current)return;
   updateBusy(true);
   try{
-    const next={...orders,move:null};
+    const next={...orders,[slot]:null};
+    // The two movement waves are ordered. If Move 1 is cleared, promote
+    // Move 2 to the first wave rather than leaving a phantom empty wave.
+    if(slot==="move"&&next.move2){
+      next.move=next.move2;next.move2=null;
+    }
     let removedAttack=false;
     try{
       await request("PREVIEW",{orders:next});
     }catch{
-      // An attack that only became legal from the planned destination must
-      // not remain in a hidden, impossible order slot after clearing the move.
+      // A free attack staged from the removed destination may no longer
+      // be in range; remove only that dependent command.
       next.attack=null;
       await request("PREVIEW",{orders:next});
       removedAttack=true;
     }
     const refreshed=selectedId
-      ? await request("SELECT",{unitId:selectedId,orders:next})
-      : null;
+      ?await request("SELECT",{unitId:selectedId,orders:next})
+      :null;
     orders=next;
-    queued=orders.attack;
+    queued=orders.attack??orders.move2??orders.move;
     if(refreshed)options=refreshed.legal??[];
     el.command.textContent=options.length?"Choose a highlighted hex":"Choose a squad";
     showOrders();draw();sync3D();
     status(removedAttack
-      ? "Move cleared. Its dependent attack was also cleared."
-      : "Move cleared.");
+      ?"Move cleared. Its dependent attack was also cleared."
+      :"Move cleared.");
   }catch(error){status(String(error?.message??error));}
   finally{updateBusy(false);}
-})();});
+}
+el.clearMove.addEventListener("click",()=>{void clearMoveSlot("move");});
+el.clearMove2.addEventListener("click",()=>{void clearMoveSlot("move2");});
 el.clearAttack.addEventListener("click",()=>{
   if(busy)return;
   orders.attack=null;
-  queued=orders.move;
+  queued=orders.move2??orders.move;
   showOrders();updateBusy(false);draw();sync3D();
   status("Attack cleared.");
 });
