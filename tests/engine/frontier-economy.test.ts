@@ -126,6 +126,17 @@ describe("Frontier maneuver-v2: separate competitive round contract",()=>{
       e.payload.attackerUnitId==="A2")).toBe(true);
   });
 
+  test("refuses unimplemented abilities rather than accepting a no-op free action",()=>{
+    const state=opening(104);
+    const unit=state.units.find(u=>u.owner==="A")!;
+    const bogus:FrontierRoundPlan={bid:0,extras:[],
+      freeAction:{type:"ability",unitId:unit.id,
+        from:unit.position,to:unit.position,abilityId:"not-implemented"}};
+    expect(validateFrontierRoundPlan(bogus,"A",state,newBudget())).toEqual({
+      ok:false,reason:"frontier_ability_not_implemented",
+    });
+  });
+
   test("AP is not minted by unused free slots, but bid is consumed",()=>{
     const state=opening(12);
     const pass={bid:0,extras:[]},allIn={bid:3,extras:[]};
