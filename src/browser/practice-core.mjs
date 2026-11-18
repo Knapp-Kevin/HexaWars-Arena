@@ -51,6 +51,8 @@ export function newPractice(seed="practice-alpha-01"){
     budgetA:newBudget(),
     budgetB:newBudget(),
     history:[],
+    // Bounded memory of each side’s own orders and actual move destinations.
+    navigation:{A:[],B:[]},
     finished:null,
   };
 }
@@ -153,26 +155,41 @@ export function chooseBotAction(game,side="B"){
   }
   const moves=actions.filter(a=>a.kind==="move");
   if(!moves.length)return {kind:"pass"};
-  // When no enemy is visible, advance toward the opponent's public deployment
-  // half, not the center where identical policies otherwise circle forever.
-  const scoutTarget=side==="A"?{q:2,r:0,s:-2}:{q:-2,r:0,s:2};
-  function targetDistance(pos){
-    if(opponents.length)return Math.min(...opponents.map(e=>distance(pos,e.position)));
-    return distance(pos,scoutTarget);
+  const trail=(game.navigation?.[side]??[]).slice(-16);
+  // The board's terrain and control markers are public in local practice.
+  // Enemy positions are only those provided by the seat observation above.
+  const terrainByCoord=new Map(game.state.visible.map(c=>[key(c.position),c]));
+  const center={q:0,r:0,s:0};
+  const targets=game.state.visible.filter(c=>
+    c.controlledBy!==side && c.terrain!=="mountain" && c.terrain!=="water");
+  function nearest(pos,points){
+    if(!points.length)return 0;
+    return Math.min(...points.map(x=>distance(pos,x.position??x)));
   }
-  function moveScore(action){
-    const unit=own.find(u=>u.id===action.unitId);
-    const goal=targetDistance(action.to);
-    const prior=game.history.slice(-16).map(row=>
-      side==="A"?row.playerMove:row.botMove)
-      .filter(move=>move&&move.unitId===action.unitId);
-    const lastVisit=prior.findLastIndex(move=>
-      move.to.q===action.to.q&&move.to.r===action.to.r);
-    const repeatPenalty=lastVisit<0?0:(lastVisit+1)*5;
-    const progress=targetDistance(unit.position)-goal;
-    return goal*12+repeatPenalty-progress*4;
+  function evaluate(action){
+    const unit=own.find(x=>x.id===action.unitId);
+    const destination=terrainByCoord.get(key(action.to));
+    const unitTrail=trail.filter(x=>x.unitId===unit.id);
+    const visitCount=unitTrail.filter(x=>x.to===key(action.to)).length;
+    const reversal=unitTrail.length>0 &&
+      unitTrail.at(-1).from===key(action.to) &&
+      unitTrail.at(-1).to===key(unit.position);
+    const pursuit=opponents.length
+      ? nearest(unit.position,opponents)-nearest(action.to,opponents)
+      : distance(unit.position,center)-distance(action.to,center);
+    const territoryProgress=
+      nearest(unit.position,targets)-nearest(action.to,targets);
+    let score=pursuit*9+territoryProgress*2;
+    if(destination?.controlledBy!==side)score+=12;
+    if(destination?.controlledBy===side)score-=3;
+    score-=visitCount*14;
+    if(reversal)score-=50;
+    // Spread advances among squads rather than repeatedly moving one scout.
+    score-=unitTrail.length*1.5;
+    score-=nearest(action.to,opponents.length?opponents:[center])*.2;
+    return score;
   }
-  moves.sort((a,b)=>moveScore(a)-moveScore(b)||
+  moves.sort((a,b)=>evaluate(b)-evaluate(a)||
     a.unitId.localeCompare(b.unitId)||a.to.q-b.to.q||a.to.r-b.to.r);
   return moves[0];
 }
@@ -202,6 +219,8 @@ export function advancePractice(game,action){
   const planA=checkedPlan(game,"A",action);
   const aiAction=chooseBotAction(game,"B");
   const planB=checkedPlan(game,"B",aiAction);
+  const startingPositions=new Map(game.state.units.map(u=>
+    [u.id,clonePos(u.position)]));
   const result=runRound({
     matchId:game.matchId,round:game.round,state:game.state,
     planA,planB,budgetA:game.budgetA,budgetB:game.budgetB,
@@ -210,6 +229,19 @@ export function advancePractice(game,action){
   game.budgetA=result.nextBudgetA;
   game.budgetB=result.nextBudgetB;
   game.round+=1;
+  // Record the acting side's own move only. Failed moves also become
+  // evidence against repeatedly choosing the same blocked destination.
+  for(const [side,command] of [["A",action],["B",aiAction]]){
+    if(command?.kind!=="move")continue;
+    const from=startingPositions.get(command.unitId);
+    if(!from)continue;
+    const after=game.state.units.find(u=>u.id===command.unitId);
+    const to=after?.position??from;
+    game.navigation[side].push({
+      unitId:command.unitId,from:key(from),to:key(to),round:game.round,
+    });
+    if(game.navigation[side].length>16)game.navigation[side].shift();
+  }
   const outcome=checkVictory(game.state);
   if(outcome.winner!==null)game.finished=outcome;
   const events=result.events.map(ev=>ev.type);
