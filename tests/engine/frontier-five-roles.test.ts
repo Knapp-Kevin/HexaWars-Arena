@@ -1,6 +1,6 @@
 import {describe,expect,test} from "bun:test";
 import {initFrontierBoard} from "../../src/engine/board.ts";
-import {createUnit,getAllUnits,placeFrontierRoleUnits,FRONTIER_ROLES} from "../../src/engine/units.ts";
+import {createUnit,createFrontierRoleUnit,getAllUnits,placeFrontierRoleUnits,FRONTIER_ROLES} from "../../src/engine/units.ts";
 import {RANGE,MOVE_POINTS} from "../../src/engine/constants.ts";
 import {resolveFrontierRoleCombat,FRONTIER_ROLE_SPECIALS} from "../../src/engine/frontier-role-combat.ts";
 import {visibleCellsSymmetric} from "../../src/engine/fog-corrected.ts";
@@ -12,7 +12,9 @@ import type {CubeCoord,HexCell,MatchState,Unit,FrontierRoundPlan} from "../../sr
 const p=(q:number,r:number):CubeCoord=>({q:q||0,r:r||0,s:-(q+r)||0});
 const same=(a:CubeCoord,b:CubeCoord)=>a.q===b.q&&a.r===b.r;
 const troop=(owner:"A"|"B",role:Unit["type"],q:number,r:number):Unit=>({
-  ...createUnit(owner,p(q,r),role),
+  ...(FRONTIER_ROLES.some(r=>r===role)
+    ?createFrontierRoleUnit(owner,p(q,r),role as typeof FRONTIER_ROLES[number])
+    :createUnit(owner,p(q,r),role)),
   id:owner+role+q+":"+r,
 });
 function arena(units:Unit[]):MatchState{
