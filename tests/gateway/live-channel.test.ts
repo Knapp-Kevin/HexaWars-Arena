@@ -33,6 +33,10 @@ describe("live agent channel: one explicit five-role Frontier contract",()=>{
     expect(s.messages[0].maxMoveSlots).toBe(2);
     expect(s.messages[0].maxFreeAttacks).toBe(1);
     expect(s.messages[0].objectiveHold).toEqual({a:0,b:0});
+    const sites=s.messages[0].objectiveSites as Array<{owner:string|null;position:unknown}>;
+    expect(sites.length).toBe(5);
+    expect(sites.every(s=>s.owner===null&&s.position)).toBe(true);
+    expect(sites.every(s=>!Object.hasOwn(s,"unit"))).toBe(true);
     expect(JSON.stringify(s.messages[0])).not.toContain("private-not-public");
     const own=s.messages[0].units as Array<{owner:string;type:string}>;
     expect(own.length).toBe(5);
