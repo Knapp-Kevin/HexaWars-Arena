@@ -1,7 +1,7 @@
-import {newPractice,practiceView,legalCommands,advancePractice} from "./practice-core.mjs";
+import {newPractice,practiceView,legalCommands,advancePractice,validatePracticeOrders} from "./practice-core.mjs";
 let session=null;
 self.onmessage=(message)=>{
-  const {id,type,seed,topology,unitId,action}=message.data??{};
+  const {id,type,seed,topology,unitId,action,orders}=message.data??{};
   if(!Number.isSafeInteger(id))return;
   try{
     if(type==="START"){
@@ -16,8 +16,13 @@ self.onmessage=(message)=>{
         state:practiceView(session)});
       return;
     }
+    if(type==="PREVIEW"){
+      const result=validatePracticeOrders(session,"A",orders);
+      self.postMessage({id,ok:true,...result});
+      return;
+    }
     if(type==="ACTION"){
-      const result=advancePractice(session,action);
+      const result=advancePractice(session,orders??action);
       self.postMessage({id,ok:true,...result});
       return;
     }
