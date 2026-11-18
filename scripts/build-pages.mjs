@@ -119,6 +119,11 @@ for (const source of ruleSources) {
 for (const file of ["practice-core.mjs", "practice-worker.mjs", "practice.js"]) {
   await copyFile(resolve(repoRoot, "src/browser", file), join(out,file));
 }
+let practice3d = await readFile(resolve(repoRoot, "src/browser/practice-3d.mjs"),"utf8");
+const vendor3D = '"../vendor/verdant/scene-renderer.mjs"';
+if (!practice3d.includes(vendor3D))throw new Error("Practice 3D Verdant import contract changed");
+practice3d=practice3d.replace(vendor3D,'"./scene-renderer.mjs"');
+await writeFile(join(out,"practice-3d.mjs"),practice3d);
 let practiceHtml = await readFile(resolve(repoRoot, "src/browser/practice.html"), "utf8");
 practiceHtml = practiceHtml.replace("</head>", `  ${faviconLink}\n</head>`);
 await writeFile(join(out,"practice.html"), practiceHtml);
