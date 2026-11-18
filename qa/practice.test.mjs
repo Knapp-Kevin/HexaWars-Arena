@@ -141,3 +141,40 @@ test("canonical zero-HP elimination fixture terminates before the 50-round cap",
   console.log("ZERO HP FIX seed",game.seed,"completed after",game.round,
     "rounds",game.finished);
 });
+
+test("80-seed bot quality gate: low turn-cap rate, fast outcomes, no two-hex loops",()=>{
+  const tally={A:0,B:0,draw:0},turns=[],stuck=[];
+  let maxAlternation=0;
+  for(let index=0;index<80;index++){
+    const game=newPractice("cohort-"+index);
+    while(!game.finished && game.round<50){
+      const action=chooseBotAction(game,"A");
+      advancePractice(game,action);
+    }
+    assert(game.finished,"Bot game never finalized");
+    assert.equal(game.history.length,game.round);
+    tally[game.finished.winner]++;
+    turns.push(game.round);
+    if(game.round===50)stuck.push(game.seed);
+    for(const side of ["playerMove","botMove"]){
+      const unitIds=new Set(game.history.map(row=>row[side]?.unitId).filter(Boolean));
+      for(const unitId of unitIds){
+        const seen=game.history.map(row=>row[side])
+          .filter(move=>move?.unitId===unitId).map(move=>move.to.q+","+move.to.r);
+        for(let j=0;j+5<seen.length;j++){
+          const isLoop=seen[j]===seen[j+2]&&seen[j+2]===seen[j+4]&&
+            seen[j+1]===seen[j+3]&&seen[j+3]===seen[j+5]&&
+            seen[j]!==seen[j+1];
+          if(isLoop)maxAlternation=Math.max(maxAlternation,6);
+        }
+      }
+    }
+  }
+  const mean=turns.reduce((sum,round)=>sum+round,0)/turns.length;
+  console.log("80-SEED BOT COHORT",{tally,averageRounds:mean,
+    turnCaps:stuck,maxAlternation});
+  assert(mean<20,"Average match pacing deteriorated");
+  assert(tally.draw<=6,"Bot remains trapped in too many turn-cap draws");
+  assert(stuck.length<=8,"Bot pursuit reaches turn cap too frequently");
+  assert.equal(maxAlternation,0,"A unit oscillated between two hexes for six moves");
+});
