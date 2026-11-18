@@ -176,6 +176,18 @@ export function chooseBotAction(game,side="B"){
   const moves=actions.filter(a=>a.kind==="move");
   if(!moves.length)return {kind:"pass"};
   const trail=(game.navigation?.[side]??[]).slice(-16);
+  // A large scoring penalty still let the primary bot choose an immediate
+  // reversal when other priorities dominated. The complementary move slot
+  // already treats reversals as ineligible; apply that same deterministic
+  // rule to the primary move. Holding is preferable to direction thrashing.
+  const nonReversals=moves.filter(action=>{
+    const unit=own.find(u=>u.id===action.unitId);
+    const previous=trail.filter(t=>t.unitId===action.unitId).at(-1);
+    return !previous || !unit ||
+      previous.from!==key(action.to) ||
+      previous.to!==key(unit.position);
+  });
+  if(!nonReversals.length)return {kind:"pass"};
   // The board's terrain and control markers are public in local practice.
   // Enemy positions are only those provided by the seat observation above.
   const terrainByCoord=new Map(game.state.visible.map(c=>[key(c.position),c]));
@@ -209,9 +221,9 @@ export function chooseBotAction(game,side="B"){
     score-=nearest(action.to,opponents.length?opponents:[center])*.2;
     return score;
   }
-  moves.sort((a,b)=>evaluate(b)-evaluate(a)||
+  nonReversals.sort((a,b)=>evaluate(b)-evaluate(a)||
     a.unitId.localeCompare(b.unitId)||a.to.q-b.to.q||a.to.r-b.to.r);
-  return moves[0];
+  return nonReversals[0];
 }
 /**
  * Browser practice accepts old one-action calls for historical contract parity
