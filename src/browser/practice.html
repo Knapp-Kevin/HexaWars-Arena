@@ -93,6 +93,57 @@
       .unit-label{font-size:19px}
     }
     @media(prefers-reduced-motion:reduce){.hex{transition:none}}
+    [hidden]{display:none!important}
+    .game3d{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab;outline-offset:-3px}
+    .ready{z-index:5}
+    .three-d-target.queued{box-shadow:0 0 0 4px #ffd98e,0 0 24px #f4ba62!important}
+    .three-d-markers{position:absolute;inset:0;pointer-events:none;z-index:2}
+    .three-d-target{position:absolute;pointer-events:none;transform:translate(-50%,-50%);min-height:36px;min-width:36px;border-radius:50%;padding:3px 5px;font-size:21px;font-weight:900;box-shadow:0 1px 13px #000b;text-shadow:0 1px 2px #000}
+    .three-d-target.select{background:#244e79ec;border:2px solid #9ad1ff;color:#f4faff}
+    .three-d-target.move{background:#0c4765de;border:2px solid #bcecff;color:#f2fbff}
+    .three-d-target.attack{background:#8f2635ec;border:2px solid #ffb3b9;color:#fff5f5}
+    .three-d-tray{position:absolute;left:9px;right:9px;top:58px;z-index:3;pointer-events:auto;display:flex;align-items:center;gap:7px;max-height:64px;padding:7px;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;background:#0a2034ed;border:1px solid #58758d;border-radius:11px;box-shadow:0 5px 20px #0008}
+    .three-d-tray-choice{flex:0 0 auto;min-width:96px;min-height:44px;white-space:nowrap;padding:7px 12px;font-size:12px;letter-spacing:.01em}
+    .three-d-tray-choice{border:1px solid #90b6cb;color:#eaf6ff;background:#22445f}
+    .three-d-tray-choice.attack{border-color:#ff868e;background:#7d2937}
+    .three-d-tray-choice.select{border-color:#8fc8fb;background:#204a73}
+    .three-d-tray-choice.queued{box-shadow:inset 0 0 0 2px #f5cd77}
+    .view-switch,.game3d-tools{position:absolute;z-index:3}
+    .view-switch{top:10px;right:10px;padding:7px 13px;min-height:38px;font-size:12px;background:#142d44ef;border-color:#b6d6ec}
+    .game3d-tools{right:10px;bottom:10px;display:flex;gap:5px;padding:5px;border:1px solid #536d84;border-radius:11px;background:#0b1d30e8}
+    .game3d-tools button{min-width:40px;min-height:40px;padding:3px 8px;font-size:20px}
+    .game3d-tools #game-3d-reset{font-size:12px;min-width:58px}
+    @media(max-width:860px){
+      .view-switch{top:7px;right:7px;min-height:34px;padding:5px 10px;font-size:11px}
+      .game3d-tools{right:6px;bottom:7px}
+      .game3d-tools button{min-width:38px;min-height:38px}
+      .three-d-target{min-width:38px;min-height:38px}
+      .three-d-target{display:none!important}
+      .three-d-tray{position:absolute;left:7px;right:7px;top:51px;z-index:3;pointer-events:auto;display:flex;align-items:center;gap:7px;max-height:62px;padding:7px;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;background:#0a2034ed;border:1px solid #58758d;border-radius:11px;box-shadow:0 5px 20px #0008}
+      .three-d-tray-choice{flex:0 0 auto;min-width:96px;min-height:44px;white-space:nowrap;padding:7px 12px;font-size:12px;letter-spacing:.01em}
+    }
+
+    /* Game-first phone HUD: battle and primary actions stay within one screen. */
+    @media(max-width:860px){
+      body.is-3d{padding-bottom:102px}
+      .is-3d .arena{height:clamp(450px,calc(100dvh - 165px),735px);min-height:450px}
+      .is-3d aside>section.panel:first-child{display:none}
+      .is-3d aside .panel.actionbar{
+        position:fixed;left:0;right:0;bottom:0;z-index:9;
+        display:grid;grid-template-columns:1fr 1fr;gap:7px;
+        padding:8px 12px max(8px,env(safe-area-inset-bottom));
+        border-radius:12px 12px 0 0;border:1px solid #56758d;
+        background:#0a1d30f5;box-shadow:0 -7px 28px #0008;
+      }
+      .is-3d aside .panel.actionbar #commit-round,
+      .is-3d aside .panel.actionbar #skip-round{min-height:47px;font-size:13px}
+      .is-3d aside .panel.actionbar .notice{
+        grid-column:1/-1;min-height:0;padding:0;font-size:11px;
+        white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+      }
+      .is-3d aside .panel.actionbar .victory{grid-column:1/-1}
+      .is-3d footer{display:none}
+    }
   </style>
   <script type="module" src="./practice.js"></script>
 </head>
@@ -111,6 +162,14 @@
       </div>
       <div class="arena">
         <svg id="battle-map" viewBox="-450 -450 900 900" role="group" aria-label="Interactive hex battlefield. Select a blue squad to see legal destinations and attacks."></svg>
+        <canvas id="game-3d" class="game3d" hidden tabindex="0" aria-label="Verdant 3D playable battlefield. Click blue squad markers, then choose a glowing move or attack target. Drag to orbit, scroll to zoom."></canvas>
+        <div id="game-3d-markers" class="three-d-markers" hidden role="group" aria-label="3D squad and legal order markers"></div>
+        <button id="toggle-3d" class="view-switch" type="button" disabled aria-pressed="false">3D view</button>
+        <div id="game-3d-tools" class="game3d-tools" hidden role="group" aria-label="3D battlefield camera">
+          <button id="game-3d-out" type="button" aria-label="Zoom out">−</button>
+          <button id="game-3d-in" type="button" aria-label="Zoom in">+</button>
+          <button id="game-3d-reset" type="button" aria-label="Reset camera">Reset</button>
+        </div>
         <div id="ready-screen" class="ready">
           <div class="ready-inner">
             <div class="seal" aria-hidden="true">⬡</div>
@@ -146,7 +205,7 @@
       </details>
     </aside>
   </main>
-  <footer>LOCAL PRACTICE · Prototype 1 · Original rules engine · No ranked outcomes. Play uses a tactical SVG control surface while the 3D battlefield gains direct command selection in the next visual slice.</footer>
+  <footer>LOCAL PRACTICE · UNRANKED · Play in 3D or use the accessible tactical map.</footer>
 </div>
 </body>
 </html>

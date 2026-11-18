@@ -296,12 +296,94 @@ async function verifyPlayablePractice(mobile=false){
   await page.close();
 }
 
+async function verifyInteractiveVerdantPractice(mobile=false){
+  const label=mobile?"practice-3d-mobile":"practice-3d-desktop";
+  const page=await newPage(label);
+  if(mobile)await page.setViewportSize({width:390,height:844});
+  const response=await page.goto(new URL("./practice.html",base).href,
+    {waitUntil:"domcontentloaded",timeout:30000});
+  assert(response?.ok(),"Playable practice URL failed");
+  await page.locator("#start-battle").click();
+  await page.waitForFunction(()=>document.querySelector("#ready-screen")?.hidden===true,
+    undefined,{timeout:30000});
+  await page.locator("#toggle-3d").click();
+  await page.waitForFunction(()=>{
+    const c=document.querySelector("#game-3d");
+    return c&&!c.hidden&&c.dataset.renderer==="webgl2"&&
+      c.dataset.boardCells==="81"&&
+      document.querySelectorAll(".three-d-target.select").length>=2;
+  },undefined,{timeout:30000});
+  assert.equal(await page.locator("#toggle-3d").getAttribute("aria-pressed"),"true");
+  if(mobile){
+    assert(await page.locator("aside>section.panel:first-child").isHidden(),
+      "Developer-style instruction panel still occupies phone gameplay");
+    const controls=await page.evaluate(()=>{
+      const commit=document.querySelector("#commit-round").getBoundingClientRect();
+      const tray=document.querySelector(".three-d-tray").getBoundingClientRect();
+      const board=document.querySelector("#game-3d").getBoundingClientRect();
+      return {
+        commitTop:commit.top,commitBottom:commit.bottom,
+        trayTop:tray.top,boardTop:board.top,
+        viewport:window.innerHeight,
+        overflow:document.documentElement.scrollWidth-window.innerWidth,
+      };
+    });
+    assert(controls.commitBottom<=controls.viewport+2 &&
+      controls.commitTop>=controls.viewport-140,
+      "Main turn control is below the phone viewport");
+    assert(controls.trayTop<controls.boardTop+160,
+      "Phone squad selector is not located above the battlefield");
+    assert(controls.overflow<=2,"3D gameplay causes horizontal phone overflow");
+  }
+  assert(await page.locator("#battle-map").isHidden(),"2D board overlays active Verdant");
+  const c=page.locator("#game-3d");
+  const home=Number(await c.getAttribute("data-camera-distance"));
+  assert(home>14&&home<100,`Unusable game camera distance: ${home}`);
+  await page.locator("#game-3d-in").click();
+  const zoomed=Number(await c.getAttribute("data-camera-distance"));
+  assert(zoomed<home*.9,"3D gameplay zoom in button ineffective");
+  await page.locator("#game-3d-reset").click();
+  assert(Math.abs(Number(await c.getAttribute("data-camera-distance"))-home)<.06,
+    "3D gameplay camera reset failed");
+  const select=page.locator(".three-d-tray-choice.select:visible");
+  assert(await select.count()>0,"No reachable 3D squad selection controls");
+  if(mobile){
+    const hitHeight=await select.first().evaluate(el=>el.getBoundingClientRect().height);
+    assert(hitHeight>=44,"Phone squad selection hit target is too small");
+  }
+  await select.first().click();
+  await page.waitForFunction(()=>
+    document.querySelectorAll(".three-d-target.move,.three-d-target.attack").length>0,
+    undefined,{timeout:15000});
+  const legal=page.locator(".three-d-tray-choice.move:visible,.three-d-tray-choice.attack:visible");
+  assert(await legal.count()>0,"No visible legal 3D orders");
+  await legal.first().click();
+  assert(await page.locator("#commit-round").isEnabled(),
+    "3D selected target did not queue a canonical order");
+  await page.locator("#commit-round").click();
+  await page.waitForFunction(()=>document.querySelector("#round-label")?.textContent?.includes("ROUND 2"),
+    undefined,{timeout:30000});
+  assert.equal(await c.getAttribute("data-board-cells"),"81");
+  await page.screenshot({path:resolve(screenshots,
+    mobile?"practice-3d-mobile.png":"practice-3d-desktop.png"),fullPage:true});
+  await page.locator("#toggle-3d").click();
+  assert(await page.locator("#battle-map").isVisible(),
+    "Accessible 2D map was not restored after 3D gameplay");
+  assert(await page.locator("#game-3d").isHidden(),
+    "3D GPU view remained on top of the 2D fallback");
+  assertHealthy(label);
+  await page.close();
+  console.log(`PASS Playable Verdant ${mobile?"mobile":"desktop"}: canonical 81-cell board, zoom, selection, action and 2D fallback`);
+}
+
 try {
   await verifyClassic();
   await verifyVerdant();
   await verifyMobileViewport();
   await verifyPlayablePractice(false);
   await verifyPlayablePractice(true);
+  await verifyInteractiveVerdantPractice(false);
+  await verifyInteractiveVerdantPractice(true);
   console.log(`PASS: browser acceptance at ${base.href}`);
 } catch (error) {
   failures.push(error);
