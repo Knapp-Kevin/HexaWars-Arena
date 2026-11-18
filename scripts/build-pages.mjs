@@ -131,7 +131,7 @@ html = html
   .replaceAll('src="/arena.html', 'src="./arena.html')
   .replace(
     '<button id="openQuickstart"',
-    '<a class="utility-button" href="./verdant.html" style="text-decoration:none;display:inline-flex;align-items:center">Verdant 3D Lab</a>\n        <button id="openQuickstart"',
+    '<a class="utility-button" href="./practice.html" style="text-decoration:none;display:inline-flex;align-items:center;background:#8ac7f7;color:#091d30;font-weight:800">Play vs AI</a>\n        <a class="utility-button" href="./verdant.html" style="text-decoration:none;display:inline-flex;align-items:center">Verdant 3D Lab</a>\n        <button id="openQuickstart"',
   )
   .replace('>View Full Replay</a>', '>Restart replay</a>')
   .replace('<a href="./arena.html" class="footer-action">Go Live</a>',
