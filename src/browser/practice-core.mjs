@@ -51,6 +51,8 @@ export function newPractice(seed="practice-alpha-01"){
     budgetA:newBudget(),
     budgetB:newBudget(),
     history:[],
+    // Bounded memory of each side’s own orders and actual move destinations.
+    navigation:{A:[],B:[]},
     finished:null,
   };
 }
@@ -143,21 +145,52 @@ export function chooseBotAction(game,side="B"){
     });
     return attacks[0];
   }
+  // The defensive bot sometimes holds a close contact instead of blindly
+  // mirroring an opponent's movement. This breaks symmetric scout chases,
+  // preserves attack opportunities and uses only seat-observed positions.
+  if(side==="B" && opponents.length){
+    const nearest=Math.min(...own.flatMap(u=>
+      opponents.map(e=>distance(u.position,e.position))));
+    if(nearest<=4 && game.round%2===0)return {kind:"pass"};
+  }
   const moves=actions.filter(a=>a.kind==="move");
   if(!moves.length)return {kind:"pass"};
-  // The opponent's concealed locations are not used to target moves.
-  // When nothing is seen, advance toward the public center objective.
-  function targetDistance(pos){
-    if(opponents.length)return Math.min(...opponents.map(e=>distance(pos,e.position)));
-    return distance(pos,{q:0,r:0,s:0});
+  const trail=(game.navigation?.[side]??[]).slice(-16);
+  // The board's terrain and control markers are public in local practice.
+  // Enemy positions are only those provided by the seat observation above.
+  const terrainByCoord=new Map(game.state.visible.map(c=>[key(c.position),c]));
+  const center={q:0,r:0,s:0};
+  const targets=game.state.visible.filter(c=>
+    c.controlledBy!==side && c.terrain!=="mountain" && c.terrain!=="water");
+  function nearest(pos,points){
+    if(!points.length)return 0;
+    return Math.min(...points.map(x=>distance(pos,x.position??x)));
   }
-  moves.sort((a,b)=>{
-    const ua=own.find(u=>u.id===a.unitId),ub=own.find(u=>u.id===b.unitId);
-    const gainA=targetDistance(ua.position)-targetDistance(a.to);
-    const gainB=targetDistance(ub.position)-targetDistance(b.to);
-    return (gainB-gainA)||targetDistance(a.to)-targetDistance(b.to)||
-      a.unitId.localeCompare(b.unitId)||a.to.q-b.to.q||a.to.r-b.to.r;
-  });
+  function evaluate(action){
+    const unit=own.find(x=>x.id===action.unitId);
+    const destination=terrainByCoord.get(key(action.to));
+    const unitTrail=trail.filter(x=>x.unitId===unit.id);
+    const visitCount=unitTrail.filter(x=>x.to===key(action.to)).length;
+    const reversal=unitTrail.length>0 &&
+      unitTrail.at(-1).from===key(action.to) &&
+      unitTrail.at(-1).to===key(unit.position);
+    const pursuit=opponents.length
+      ? nearest(unit.position,opponents)-nearest(action.to,opponents)
+      : distance(unit.position,center)-distance(action.to,center);
+    const territoryProgress=
+      nearest(unit.position,targets)-nearest(action.to,targets);
+    let score=pursuit*9+territoryProgress*2;
+    if(destination?.controlledBy!==side)score+=12;
+    if(destination?.controlledBy===side)score-=3;
+    score-=visitCount*14;
+    if(reversal)score-=50;
+    // Spread advances among squads rather than repeatedly moving one scout.
+    score-=unitTrail.length*1.5;
+    score-=nearest(action.to,opponents.length?opponents:[center])*.2;
+    return score;
+  }
+  moves.sort((a,b)=>evaluate(b)-evaluate(a)||
+    a.unitId.localeCompare(b.unitId)||a.to.q-b.to.q||a.to.r-b.to.r);
   return moves[0];
 }
 function checkedPlan(game,side,action){
@@ -186,6 +219,8 @@ export function advancePractice(game,action){
   const planA=checkedPlan(game,"A",action);
   const aiAction=chooseBotAction(game,"B");
   const planB=checkedPlan(game,"B",aiAction);
+  const startingPositions=new Map(game.state.units.map(u=>
+    [u.id,clonePos(u.position)]));
   const result=runRound({
     matchId:game.matchId,round:game.round,state:game.state,
     planA,planB,budgetA:game.budgetA,budgetB:game.budgetB,
@@ -194,11 +229,26 @@ export function advancePractice(game,action){
   game.budgetA=result.nextBudgetA;
   game.budgetB=result.nextBudgetB;
   game.round+=1;
+  // Record the acting side's own move only. Failed moves also become
+  // evidence against repeatedly choosing the same blocked destination.
+  for(const [side,command] of [["A",action],["B",aiAction]]){
+    if(command?.kind!=="move")continue;
+    const from=startingPositions.get(command.unitId);
+    if(!from)continue;
+    const after=game.state.units.find(u=>u.id===command.unitId);
+    const to=after?.position??from;
+    game.navigation[side].push({
+      unitId:command.unitId,from:key(from),to:key(to),round:game.round,
+    });
+    if(game.navigation[side].length>16)game.navigation[side].shift();
+  }
   const outcome=checkVictory(game.state);
   if(outcome.winner!==null)game.finished=outcome;
   const events=result.events.map(ev=>ev.type);
   game.history.push({round:game.round,player:action?.kind??"pass",
-    bot:aiAction.kind,events});
+    bot:aiAction.kind,events,
+    playerMove:action?.kind==="move"?structuredClone(action):null,
+    botMove:aiAction.kind==="move"?structuredClone(aiAction):null});
   return {
     round:game.round,playerAction:action?.kind??"pass",
     botAction:aiAction.kind,events,ended:game.finished,
