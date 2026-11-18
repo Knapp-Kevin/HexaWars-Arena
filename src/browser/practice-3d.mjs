@@ -58,8 +58,13 @@ export async function createPractice3D(canvas,overlay,{onHex,onUnavailable}){
     // The previous technical preview left the board occupying only ~40%
     // of a phone viewport. Fit a playable overview while reserving the
     // top command ribbon and bottom camera controls for touch.
-    return Math.max(18,state.bounds.halfExtent*2.45)*
+    const baseline=Math.max(18,state.bounds.halfExtent*2.45)*
       Math.max(1,.95/Math.max(.53,aspect));
+    // The full-board view occupied less than half of a phone's viewport,
+    // making otherwise legal targets unreadable. Use a nearer default while
+    // retaining the same bounded camera controls and reset behavior.
+    const narrow=rect.width<=860;
+    return baseline*(narrow?.72:.88);
   }
   function setZoom(value){
     state.distance=clamp(value,state.home*.46,state.home*2.6);
