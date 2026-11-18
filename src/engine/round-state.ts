@@ -29,6 +29,19 @@ export function applyEndOfRound(current: AgentRoundBudget): AgentRoundBudget {
 }
 
 /**
+ * Frontier maneuver-v2 AP closeout. Free moves and attacks are opportunities,
+ * not AP. Unused slots may NOT mint credits. Only genuinely unspent AP carries
+ * (at most 1) to the next round. Legacy applyEndOfRound stays byte-compatible.
+ */
+export function applyFrontierEndOfRound(current: AgentRoundBudget): AgentRoundBudget {
+  const remaining=Math.max(0,Math.min(current.apPool,AP_CAP));
+  return {
+    freeMove:0,freeAction:0,apPool:remaining,
+    apCarry:Math.min(remaining,MAX_CARRY),
+  };
+}
+
+/**
  * Safe fallback RoundPlan for timeout/close forfeit paths. Exported here so
  * runner + tests share the exact constant.
  */
