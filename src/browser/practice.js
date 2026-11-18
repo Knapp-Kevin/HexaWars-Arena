@@ -9,19 +9,88 @@ const el={
   selected:$("selected-name"),command:$("command-label"),instruction:$("instruction"),
   notice:$("notice"),event:$("event-label"),commit:$("commit-round"),
   pass:$("skip-round"),victory:$("victory"),result:$("result"),newBattle:$("new-battle"),
+  threeD:$("game-3d"),threeDMarkers:$("game-3d-markers"),
+  toggle3D:$("toggle-3d"),threeDTools:$("game-3d-tools"),
+  zoomIn:$("game-3d-in"),zoomOut:$("game-3d-out"),resetView:$("game-3d-reset"),
 };
 const SVG="http://www.w3.org/2000/svg",RADIUS=33,HEIGHT=Math.sqrt(3)*RADIUS;
 const colors={plain:"#4e7e58",forest:"#275541",mountain:"#71818d",water:"#246078"};
 const letters={scout:"S",infantry:"I",heavy:"H"};
 let sequence=0,current=null,selectedId=null,options=[],queued=null,busy=false;
+let scene3D=null,using3D=false,threeDLoading=false,threeDFailed=false;
 const requests=new Map();
 const worker=new Worker("./practice-worker.mjs",{type:"module"});
+/**
+ * 3D is a view over the very same public Worker projection and legal commands.
+ * If WebGL2 fails, the original keyboard-accessible SVG view remains playable.
+ */
+function sync3D(){
+  if(using3D&&scene3D&&current){
+    scene3D.update(current,{selectedId,options,queued});
+  }
+}
+function on3DHex(q,r){
+  if(!current||busy||current.ended)return;
+  const cell=current.board.find(c=>c.q===q&&c.r===r);
+  if(!cell)return;
+  const piece=current.units.find(u=>u.q===q&&u.r===r);
+  const choice=options.find(a=>a.to.q===q&&a.to.r===r);
+  clickCell(cell,piece,choice);
+}
+function show2D(reason){
+  using3D=false;
+  scene3D?.deactivate();
+  el.map.hidden=false;
+  el.threeD.hidden=true;
+  el.threeDMarkers.hidden=true;
+  el.threeDTools.hidden=true;
+  el.toggle3D.textContent=threeDFailed?"2D map":"3D view";
+  el.toggle3D.setAttribute("aria-pressed","false");
+  if(reason)status(reason);
+  updateBusy(busy);
+}
+async function toggleView(){
+  if(busy||threeDLoading||!current)return;
+  if(using3D){show2D();return;}
+  threeDLoading=true;
+  el.toggle3D.disabled=true;
+  el.map.hidden=true;
+  el.threeD.hidden=false;
+  el.threeDMarkers.hidden=false;
+  el.threeDTools.hidden=false;
+  try{
+    if(!scene3D){
+      const {createPractice3D}=await import("./practice-3d.mjs");
+      scene3D=await createPractice3D(el.threeD,el.threeDMarkers,{
+        onHex:on3DHex,
+        onUnavailable:message=>{
+          threeDFailed=true;
+          show2D(message);
+        },
+      });
+    }
+    using3D=true;
+    el.toggle3D.textContent="2D map";
+    el.toggle3D.setAttribute("aria-pressed","true");
+    sync3D();
+    scene3D.activate();
+  }catch(error){
+    threeDFailed=true;
+    show2D("3D unavailable. "+String(error?.message??error)+
+      " The 2D map remains playable.");
+  }finally{
+    threeDLoading=false;
+    updateBusy(busy);
+  }
+}
+
 function status(text){el.notice.textContent=text;}
 function updateBusy(value){
   busy=value;
   el.commit.disabled=busy||!queued||!!current?.ended;
   el.pass.disabled=busy||!current||!!current.ended;
   el.start.disabled=busy;
+  el.toggle3D.disabled=busy||!current||threeDLoading||threeDFailed;
 }
 worker.addEventListener("message",event=>{
   const reply=event.data,call=requests.get(reply.id);
@@ -123,7 +192,7 @@ function render(){
     el.command.textContent="Battle complete";
     status("Resolved locally. No ranked result was recorded.");
   }
-  updateBusy(busy);draw();
+  updateBusy(busy);draw();sync3D();
 }
 async function startBattle(){
   updateBusy(true);status("Deploying squads…");
@@ -151,7 +220,7 @@ async function selectUnit(unit){
     el.instruction.textContent=options.length?
       "White hex: move. Red hex: attack. Lock in to resolve both armies.":
       "No valid move or visible attack. Select another squad.";
-    draw();
+    draw();sync3D();
   }catch(e){status(String(e?.message||e));}
   finally{updateBusy(false);}
 }
@@ -163,7 +232,7 @@ function clickCell(cell,piece,choice){
       to:{q:cell.q,r:cell.r,s:-cell.q-cell.r}};
     el.command.textContent=(choice.kind==="attack"?"Attack ":"Move to ")+cell.q+", "+cell.r;
     status("Order ready. Lock in to resolve the round.");
-    updateBusy(false);draw();
+    updateBusy(false);draw();sync3D();
   }else if(!selectedId)status("Select a blue squad first.");
   else status("That hex is not a legal target.");
 }
@@ -188,3 +257,7 @@ el.start.addEventListener("click",startBattle);
 el.newBattle.addEventListener("click",startBattle);
 el.commit.addEventListener("click",()=>{if(queued)void advance(queued);});
 el.pass.addEventListener("click",()=>{void advance({kind:"pass"});});
+el.toggle3D.addEventListener("click",()=>{void toggleView();});
+el.zoomIn.addEventListener("click",()=>scene3D?.zoomIn());
+el.zoomOut.addEventListener("click",()=>scene3D?.zoomOut());
+el.resetView.addEventListener("click",()=>scene3D?.reset());
