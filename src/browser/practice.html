@@ -152,6 +152,27 @@
     .board-choice label strong{font-size:13px;color:#f6f9fa}
     .board-choice label small{font-size:10px;line-height:1.3;color:#b9cfdf}
     @media(max-width:860px){.board-choice label{min-height:72px;padding:9px 6px}}
+
+    .victory{position:absolute;inset:0;z-index:6;display:grid;place-items:center;margin:0;border:0;
+      padding:20px;background:#061421dc;backdrop-filter:blur(5px);color:#edf7ff;text-align:center}
+    .victory-card{width:min(100%,420px);padding:25px 20px 21px;border-radius:18px;
+      border:1px solid #aac9df;background:linear-gradient(140deg,#183950,#0a1a2a);
+      box-shadow:0 25px 70px #000b}
+    .victory-card h2{font-size:clamp(30px,5vw,44px);margin:6px 0;color:#f0cc8c}
+    .victory-card p:not(.overline){color:#c3d8e9;font-size:14px;line-height:1.5}
+    .victory-actions{display:flex;gap:9px;justify-content:center;flex-wrap:wrap;margin-top:17px}
+    .victory-actions button{flex:1 1 130px;min-height:48px}
+    #change-arena{background:transparent;border-color:#83a8c2}
+    @media(max-width:860px){
+      .victory-card{padding:18px 13px 16px}
+      .victory-card h2{font-size:32px}
+      .is-3d .statusline{display:none}
+    }
+    /* Finish screen is an outcome, not a disabled order form. */
+    .match-finished main{grid-template-columns:minmax(0,1fr)}
+    .match-finished aside{display:none!important}
+    .match-finished .statusline{display:none}
+    .match-finished.is-3d{padding-bottom:0}
   </style>
   <script type="module" src="./practice.js"></script>
 </head>
@@ -193,6 +214,17 @@
             <button id="start-battle" type="button">Start battle</button>
           </div>
         </div>
+        <div class="victory" id="victory" hidden role="region" aria-labelledby="result">
+          <div class="victory-card">
+            <p class="overline">BATTLE COMPLETE</p>
+            <h2 id="result">Battle complete</h2>
+            <p id="result-detail">The match is over.</p>
+            <div class="victory-actions">
+              <button id="new-battle" type="button">Play again</button>
+              <button id="change-arena" type="button">Change arena</button>
+            </div>
+          </div>
+        </div>
       </div>
       <div class="statusline" id="event-label" role="status">Unranked practice · Runs on your device</div>
     </section>
@@ -208,15 +240,12 @@
         <button id="commit-round" type="button" disabled>Lock in order</button>
         <button id="skip-round" type="button" disabled>Pass round</button>
         <div class="notice" id="notice" role="status" aria-live="polite"></div>
-        <div class="victory" id="victory" hidden>
-          <div id="result"></div>
-          <button id="new-battle" type="button">New battle</button>
-        </div>
+
       </section>
       <details class="panel tips">
         <summary>How it works</summary>
         <p>Each round, both sides submit one free move or attack. Moves use unit-specific ranges. Terrain can block movement, and units can counterattack. Your orders are validated by the original HexaWars rules engine, which runs locally in a Web Worker.</p>
-        <p>Practice uses the original 81-cell rules board until the new balanced map is formally adopted. There is no account, ranking, cloud matchmaking, or reliable anti-cheat protection in a local game.</p>
+        <p>Choose a Balanced Hex preview or the original Classic arena before each battle. Both use the same legal-action and combat rules. Local practice has no ranking, cloud matchmaking, or anti-cheat enforcement.</p>
       </details>
     </aside>
   </main>

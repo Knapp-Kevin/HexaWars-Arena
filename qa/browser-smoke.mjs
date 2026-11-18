@@ -405,6 +405,92 @@ async function verifyOriginalLegacyArena(){
   console.log("PASS Historic 81-cell arena remains selectable and playable");
 }
 
+async function verifyFinishedMatchAndRematch(mobile=false){
+  const label=mobile?"full-match-mobile-3d":"full-match-desktop-2d";
+  const page=await newPage(label);
+  if(mobile)await page.setViewportSize({width:390,height:844});
+  const response=await page.goto(new URL("./practice.html",base).href,
+    {waitUntil:"domcontentloaded",timeout:30000});
+  assert(response?.ok());
+  await page.locator("#start-battle").click();
+  await page.waitForFunction(()=>document.querySelector("#ready-screen")?.hidden===true &&
+    document.querySelectorAll("#battle-map .cell").length===61,
+    undefined,{timeout:30000});
+  if(mobile){
+    await page.locator("#toggle-3d").click();
+    await page.waitForFunction(()=>
+      document.querySelector("#game-3d")?.dataset.renderer==="webgl2" &&
+      document.querySelector("#game-3d")?.dataset.boardCells==="61" &&
+      document.querySelectorAll(".three-d-tray-choice.select").length>0,
+      undefined,{timeout:30000});
+    await page.locator(".three-d-tray-choice.select:visible").first().click();
+    await page.waitForFunction(()=>
+      document.querySelectorAll(".three-d-tray-choice.move,.three-d-tray-choice.attack").length>0,
+      undefined,{timeout:15000});
+    await page.locator(".three-d-tray-choice.move:visible,.three-d-tray-choice.attack:visible").first().click();
+  }else{
+    await page.locator('#battle-map .cell[aria-label*="Blue"]').first().click();
+    await page.waitForFunction(()=>
+      document.querySelectorAll("#battle-map .cell.available, #battle-map .cell.attack").length>0,
+      undefined,{timeout:15000});
+    await page.locator("#battle-map .cell.available, #battle-map .cell.attack").first().click();
+  }
+  assert(await page.locator("#commit-round").isEnabled(),"Legal order not queued for full match");
+  await page.locator("#commit-round").click();
+  await page.waitForFunction(()=>document.querySelector("#round-label")?.textContent?.includes("ROUND 2"),
+    undefined,{timeout:30000});
+  assert(!(await page.locator("#event-label").innerText()).includes("unit_moved"),
+    "Developer event type leaked into player HUD");
+
+  let completed=false;
+  for(let turn=0;turn<50;turn++){
+    if(await page.locator("#victory").isVisible()){completed=true;break;}
+    const labelBefore=(await page.locator("#round-label").innerText()).trim();
+    const skip=page.locator("#skip-round");
+    assert(await skip.isEnabled(),`Cannot complete match at ${labelBefore}`);
+    await skip.click();
+    await page.waitForFunction(before=>
+      document.querySelector("#victory")?.hidden===false ||
+      document.querySelector("#round-label")?.textContent?.trim()!==before,
+      labelBefore,{timeout:15000});
+  }
+  assert(completed||await page.locator("#victory").isVisible(),
+    "Match failed to reach a visible final outcome");
+  const finalTitle=(await page.locator("#result").innerText()).trim();
+  assert(["Victory","Defeat","Draw"].includes(finalTitle),
+    `User-facing outcome is not intelligible: ${finalTitle}`);
+  assert((await page.locator("#round-label").innerText()).includes("FINAL"),
+    "Finished match has invalid ROUND 51 / 50 indicator");
+  assert((await page.locator("#result-detail").innerText()).includes("Unranked"));
+  assert(await page.locator("#commit-round").isDisabled());
+  assert(await page.locator("#skip-round").isDisabled());
+  assert(await page.locator("aside").isHidden(),
+    "Finished battle still shows obsolete orders or disabled command bars");
+  assert(await page.locator("body").evaluate(el=>el.classList.contains("match-finished")));
+  await page.screenshot({path:resolve(screenshots,
+    mobile?"practice-complete-mobile.png":"practice-complete-desktop.png"),fullPage:true});
+
+  await page.locator("#change-arena").click();
+  assert(await page.locator("#ready-screen").isVisible(),"Cannot return to arena selection");
+  await page.locator('input[name="arena-topology"][value="legacy81"]').check();
+  await page.locator("#start-battle").click();
+  await page.waitForFunction(()=>
+    document.querySelector("#ready-screen")?.hidden===true &&
+    document.querySelectorAll("#battle-map .cell").length===81,
+    undefined,{timeout:30000});
+  if(mobile){
+    await page.waitForFunction(()=>
+      document.querySelector("#game-3d")?.dataset.boardCells==="81",
+      undefined,{timeout:30000});
+    assert.equal(await page.locator("#game-3d").getAttribute("data-animation-state"),"idle",
+      "3D view fabricated a movement transition between different match seeds");
+  }
+  assertHealthy(label);
+  await page.close();
+  console.log("PASS Completed "+(mobile?"mobile 3D":"desktop 2D")+
+    " game, human legal action, final outcome, rematch and versioned arena switch");
+}
+
 try {
   await verifyClassic();
   await verifyVerdant();
@@ -414,6 +500,8 @@ try {
   await verifyOriginalLegacyArena();
   await verifyInteractiveVerdantPractice(false);
   await verifyInteractiveVerdantPractice(true);
+  await verifyFinishedMatchAndRematch(false);
+  await verifyFinishedMatchAndRematch(true);
   console.log(`PASS: browser acceptance at ${base.href}`);
 } catch (error) {
   failures.push(error);
