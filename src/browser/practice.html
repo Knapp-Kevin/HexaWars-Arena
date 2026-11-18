@@ -173,6 +173,28 @@
     .match-finished aside{display:none!important}
     .match-finished .statusline{display:none}
     .match-finished.is-3d{padding-bottom:0}
+    .order-slots{display:grid;gap:7px;grid-column:1/-1}
+    .order-slot{display:flex;align-items:center;justify-content:space-between;gap:8px;
+      border:1px solid #3b5970;background:#10283a;border-radius:9px;padding:8px 9px;min-height:59px}
+    .order-slot>div{display:grid;gap:3px;min-width:0}
+    .slot-label{font-size:10px;letter-spacing:.09em;color:#f1d295;font-weight:850}
+    .order-slot strong{font-size:12px;color:#f5fbff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .order-slot button{flex:0 0 auto;min-height:40px;min-width:58px;font-size:11px;padding:5px}
+    .bid-line{display:flex;align-items:center;justify-content:space-between;gap:8px;
+      color:#e9d7a4;font-size:11px;font-weight:800;letter-spacing:.07em}
+    .bid-line small{display:block;color:#adc6d8;font-size:10px;margin-top:3px;letter-spacing:0}
+    .bid-line select{appearance:auto;min-height:43px;border:1px solid #7793a9;border-radius:8px;
+      background:#152f47;color:#f7f8fb;padding:6px 10px;max-width:120px}
+    @media(max-width:860px){
+      .is-3d .arena{height:clamp(350px,calc(100dvh - 270px),625px)}
+      .is-3d aside .panel.actionbar{max-height:min(44dvh,270px);overflow:auto}
+      .is-3d aside .panel.actionbar .order-slots{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:5px}
+      .is-3d .order-slot{min-height:58px;padding:5px;align-items:stretch}
+      .is-3d .order-slot strong{font-size:11px}
+      .is-3d .order-slot button{min-width:42px;padding:3px;font-size:10px}
+      .is-3d .bid-line{grid-column:1/-1}
+      .is-3d .bid-line select{max-width:145px;min-height:38px}
+    }
   </style>
   <script type="module" src="./practice.js"></script>
 </head>
@@ -236,15 +258,35 @@
         <div class="command" id="command-label">Select a squad</div>
         <div class="detail" id="instruction">Available moves appear in blue; attacks appear in red.</div>
       </section>
-      <section class="panel actionbar">
-        <button id="commit-round" type="button" disabled>Lock in order</button>
-        <button id="skip-round" type="button" disabled>Pass round</button>
+      <section class="panel actionbar" aria-label="Build your round plan">
+        <div class="order-slots">
+          <div class="order-slot">
+            <div><span class="slot-label">1 FREE MOVE</span><strong id="planned-move">Choose a squad</strong></div>
+            <button id="clear-move" type="button" aria-label="Clear planned move" disabled>Clear</button>
+          </div>
+          <div class="order-slot">
+            <div><span class="slot-label">1 FREE ATTACK</span><strong id="planned-attack">Choose a target</strong></div>
+            <button id="clear-attack" type="button" aria-label="Clear planned attack" disabled>Clear</button>
+          </div>
+          <label class="bid-line" for="bid-amount">
+            <span>INITIATIVE BID <small id="bid-budget">0 / 3 AP</small></span>
+            <select id="bid-amount" aria-label="Initiative AP bid">
+              <option value="0">0 AP · Save</option>
+              <option value="1">1 AP</option>
+              <option value="2">2 AP</option>
+              <option value="3">3 AP</option>
+              <option value="4">4 AP</option>
+            </select>
+          </label>
+        </div>
+        <button id="commit-round" type="button" disabled>Resolve round</button>
+        <button id="skip-round" type="button" disabled>Hold both</button>
         <div class="notice" id="notice" role="status" aria-live="polite"></div>
 
       </section>
       <details class="panel tips">
         <summary>How it works</summary>
-        <p>Each round, both sides submit one free move or attack. Moves use unit-specific ranges. Terrain can block movement, and units can counterattack. Your orders are validated by the original HexaWars rules engine, which runs locally in a Web Worker.</p>
+        <p>Each round, queue <strong>one free move and one free attack</strong>, possibly on different Blue squads. Tap a unit to see allowed moves and attacks. Review your two slots, then resolve the round. Both sides act in initiative order. A higher AP bid moves first but burns that AP. Further AP extras are not yet available in practice.</p><p>Scouts move exactly three hexes, infantry two, heavies one. A legal move must follow passable connected terrain. Attacks have each squad's own range and retaliation risks. This preview limits same-squad move-and-attack combinations that would leave the attack out of range.</p>
         <p>Choose a Balanced Hex preview or the original Classic arena before each battle. Both use the same legal-action and combat rules. Local practice has no ranking, cloud matchmaking, or anti-cheat enforcement.</p>
       </details>
     </aside>
