@@ -5,7 +5,7 @@ No authority, world-state, fog, damage, deployment or replay rules change.
 
 ## Player behavior
 
-- The 2D battlefield shows a compact horizontally scrollable selector for
+- The 2D command HUD shows a compact horizontally scrollable selector for
   every friendly squad, including role and current HP. On the Frontier127
   board that means five visible, keyboard-accessible 46-pixel targets.
 - Selecting one squad focuses the SVG map on it and zooms to a readable
