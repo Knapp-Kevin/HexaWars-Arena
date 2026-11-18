@@ -172,6 +172,19 @@ export const FRONTIER_ROLES = [
   "scout","raider","interceptor","siege","captain",
 ] as const;
 
+/**
+ * The historical Scout has 3 HP / 2 strength. The original five-role Scout
+ * instead has 5 HP / 5 strength. Do NOT alter legacy createUnit("scout"):
+ * instantiate the new Scout explicitly under this single new rules identity.
+ */
+export function createFrontierRoleUnit(
+  owner:"A"|"B",position:CubeCoord,
+  role:typeof FRONTIER_ROLES[number],
+):Unit {
+  const base=createUnit(owner,position,role);
+  return role==="scout"?{...base,hp:5,strength:5}:base;
+}
+
 export function placeFrontierRoleUnits(board:HexCell[][]):HexCell[][] {
   for(let index=0;index<FRONTIER_STARTS_A.length;index++){
     const pos=FRONTIER_STARTS_A[index];
@@ -183,7 +196,7 @@ export function placeFrontierRoleUnits(board:HexCell[][]):HexCell[][] {
       if(!cell||cell.unit||cell.terrain==="water"||cell.terrain==="mountain")
         throw new Error("Frontier five-role spawn is blocked or occupied");
       cell.unit={
-        ...createUnit(owner,position,role),
+        ...createFrontierRoleUnit(owner,position,role),
         id:`frontier-${owner}-${index+1}-${role}`,
       };
     }
