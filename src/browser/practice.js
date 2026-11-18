@@ -185,6 +185,7 @@ function draw(){
 }
 function render(){
   if(!current)return;
+  document.body.classList.toggle("match-finished",Boolean(current.ended));
   el.round.textContent=current.ended
     ? "FINAL · "+current.round+" ROUNDS"
     : "ROUND "+(current.round+1)+" / "+current.roundCap;
